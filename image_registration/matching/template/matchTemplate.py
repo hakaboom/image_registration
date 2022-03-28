@@ -1,6 +1,7 @@
 #! usr/bin/python
 # -*- coding:utf-8 -*-
 """ opencv matchTemplate"""
+import warnings
 import cv2
 import numpy as np
 from baseImage import Image, Rect
@@ -36,12 +37,12 @@ class MatchTemplate(object):
 
         Args:
             im_source: 待匹配图像
-            im_search: 模板
-            threshold:: 识别阈值(0~1)
+            im_search: 图片模板
+            threshold: 识别阈值(0~1)
             rgb: 是否使用rgb通道进行校验
 
         Returns:
-
+            generate_result
         """
         threshold = threshold or self.threshold
         rgb = rgb or self.rgb
@@ -50,10 +51,9 @@ class MatchTemplate(object):
         if im_source.channels == 1:
             rgb = False
 
-        result = self._get_template_result_matrix(im_source=im_source, im_search=im_search, rgb=rgb)
+        result = self._get_template_result_matrix(im_source=im_source, im_search=im_search)
         # 找到最佳匹配项
         min_val, max_val, min_loc, max_loc = self.minMaxLoc(result.data)
-        print(min_val, max_val, min_loc, max_loc)
         h, w = im_search.size
         # 求可信度
         crop_rect = Rect(max_loc[0], max_loc[1], w, h)
@@ -66,13 +66,13 @@ class MatchTemplate(object):
         rect = Rect(x=x, y=y, width=w, height=h)
         return generate_result(rect, confidence)
 
-    def find_all_result(self, im_source: Image, im_search: Image, threshold=None, rgb=None, max_count=10):
+    def find_all_results(self, im_source: Image, im_search: Image, threshold=None, rgb=None, max_count=10):
         """
         模板匹配, 返回匹配度大于阈值的范围, 且最大数量不超过max_count
 
         Args:
             im_source: 待匹配图像
-            im_search: 模板
+            im_search: 图片模板
             threshold:: 识别阈值(0~1)
             rgb: 是否使用rgb通道进行校验
             max_count: 最多匹配数量
@@ -87,7 +87,7 @@ class MatchTemplate(object):
         if im_source.channels == 1:
             rgb = False
 
-        result = self._get_template_result_matrix(im_source=im_source, im_search=im_search, rgb=rgb)
+        result = self._get_template_result_matrix(im_source=im_source, im_search=im_search)
         results = []
         # 找到最佳匹配项
         h, w = im_search.size
@@ -105,9 +105,9 @@ class MatchTemplate(object):
 
         return results if results else None
 
-    def _get_template_result_matrix(self, im_source: Image, im_search: Image, rgb: bool) -> Image:
+    def _get_template_result_matrix(self, im_source: Image, im_search: Image) -> Image:
         """求取模板匹配的结果矩阵."""
-        if rgb:
+        if im_source.channels == 3:
             i_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
             s_gray = im_search.cvtColor(cv2.COLOR_BGR2GRAY).data
         else:
@@ -125,6 +125,13 @@ class MatchTemplate(object):
         assert im_source.place == im_search.place, '输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place)
         assert im_source.dtype == im_search.dtype, '输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype)
         assert im_source.channels == im_search.channels, '输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels)
+
+        if im_source.place == Place.UMat:
+            warnings.warn('Umat has error,will clone new image with np.ndarray '
+                          '(https://github.com/opencv/opencv/issues/21788)')
+            im_source = Image(im_source, place=Place.Mat, dtype=im_source.dtype)
+            im_search = Image(im_search, place=Place.Mat, dtype=im_search.dtype)
+
         return im_source, im_search
 
     def _image_check(self, data: Union[str, bytes, np.ndarray, cv2.cuda.GpuMat, cv2.Mat, cv2.UMat, Image]):
