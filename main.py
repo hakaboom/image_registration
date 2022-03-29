@@ -7,14 +7,15 @@ from image_registration.matching.keypoint.sift import SIFT
 import time
 
 
-a = ORB()
+a = SIFT()
 
 
-im_source = Image('tests/image/2.png', place=3)
+im_source = Image('tests/image/1.png', place=1).resize(1920, 1080)
 # im_source.rectangle(rect=Rect(1244, 108, 31, 30), color=(0, 0, 0), thickness=-1)
-im_search = Image('tests/image/2.png', place=3)# .crop(Rect(1244, 108, 32, 31))
-
-for i in range(100):
+im_search = Image('tests/image/1.png', place=1).crop(Rect(1244, 108, 32, 31))
+"""34.058773040771484, 246.36355590820312"""
+for i in range(1):
     start = time.time()
-    a.get_keypoint_and_descriptor(im_source)
+    a.find_best_result(im_source, im_search)
     print(time.time() - start)
+

@@ -21,10 +21,11 @@ class SIFT(BaseKeypoint):
         Returns:
             cv2.FlannBasedMatcher
         """
-        index_params = {'algorithm': self.FLANN_INDEX_KDTREE, 'tree': 5}
-        # 指定递归遍历的次数. 值越高结果越准确，但是消耗的时间也越多
-        search_params = {'checks': 50}
-        matcher = cv2.FlannBasedMatcher(index_params, search_params)
+        # index_params = {'algorithm': self.FLANN_INDEX_KDTREE, 'tree': 5}
+        # # 指定递归遍历的次数. 值越高结果越准确，但是消耗的时间也越多
+        # search_params = {'checks': 50}
+        # matcher = cv2.FlannBasedMatcher(index_params, search_params)
+        matcher = cv2.BFMatcher_create(cv2.NORM_L2)
         return matcher
 
     def create_detector(self, **kwargs) -> cv2.SIFT:

@@ -98,10 +98,17 @@ class BaseKeypoint(object):
             rect, matches, good
         """
         matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
-        # cv2.imshow('matches', cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2))
+        for i in matches:
+            # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, (i,), None, flags=2)).imshow('matches')
+            Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow('matches')
+            print(', '.join([str(_.distance) for _ in i]))
+            cv2.waitKey(0)
+
+        exit()
         good = self.get_good_in_matches(matches=matches)
-        # cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2))
+        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2))
         rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=good)
+        cv2.waitKey(0)
         return rect, matches, good
 
     def match_keypoint(self, des_sch, des_src, k=2):
@@ -117,7 +124,7 @@ class BaseKeypoint(object):
             List[List[cv2.DMatch]]: 包含最匹配的描述符
         """
         # k=2表示每个特征点取出2个最匹配的对应点
-        matches = self.matcher.knnMatch(des_sch, des_src, k)
+        matches = self.matcher.knnMatch(des_sch, des_src, 2)
         return matches
 
     def get_good_in_matches(self, matches):
