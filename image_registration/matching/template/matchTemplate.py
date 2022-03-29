@@ -15,7 +15,7 @@ from typing import Union
 class MatchTemplate(object):
     METHOD_NAME = 'tpl'
     Dtype = np.uint8
-    Place = (Place.Mat, Place.UMat, Place.Ndarray)
+    Place = (Place.Mat, Place.Ndarray)
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True):
         """
@@ -196,6 +196,14 @@ class MatchTemplate(object):
             bgr_confidence[i] = max_val
 
         return min(bgr_confidence)
+
+    def cal_ccoeff_confidence(self, im_source: Image, im_search: Image):
+        img_src_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
+        img_sch_gray = im_search.cvtColor(cv2.COLOR_BGR2GRAY).data
+
+        res_temp = self.match(img_sch_gray, img_src_gray)
+        min_val, max_val, min_loc, max_loc = self.minMaxLoc(res_temp)
+        return max_val
 
     def _get_confidence_from_matrix(self, img_crop, im_search, max_val, rgb):
         """根据结果矩阵求出confidence."""
