@@ -2,11 +2,10 @@
 # -*- coding:utf-8 -*-
 import cv2
 import numpy as np
-from typing import Union, Optional, Type, Any, Tuple, List
-from baseImage.constant import Place
-from baseImage import Image, Rect
+from typing import Union, Tuple, List
 
-from image_registration.matching import MatchTemplate, CudaMatchTemplae
+from baseImage import Image
+
 from image_registration.matching.keypoint.base import BaseKeypoint
 
 
@@ -20,4 +19,4 @@ class SIFT(BaseKeypoint):
     FLANN_INDEX_KDTREE: int = 0
 
     def __init__(self, nfeatures: int = 0, nOctaveLayers: int = 3, contrastThreshold: float = 0.04,
-                 edgeThreshold: int = 10, sigma: float = 1.6) -> cv2.SIFT: ...
+                 edgeThreshold: int = 10, sigma: float = 1.6): ...
