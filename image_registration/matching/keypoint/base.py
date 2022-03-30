@@ -98,20 +98,55 @@ class BaseKeypoint(object):
             rect, matches, good
         """
         matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
-        for i in matches:
-            # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, (i,), None, flags=2)).imshow('matches')
-            Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow('matches')
-            print(', '.join([str(_.distance) for _ in i]))
-            cv2.waitKey(0)
-
-        exit()
         good = self.get_good_in_matches(matches=matches)
-        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2))
+        # 按照queryIdx排升序
+        start = time.time()
+        good = sorted(good, key=lambda x: x.queryIdx)
+        # 筛选重复的queryidx
+        queryidx_list = []
+        queryidx_index = 0
+        queryidx_flag = True
+        while queryidx_flag:
+            point = good[queryidx_index]
+            _queryIdx = point.queryIdx
+            queryidx_list.append([point])
+            while True:
+                queryidx_index += 1
+                if queryidx_index == len(good):
+                    queryidx_flag = False
+                    break
+                new_point = good[queryidx_index]
+                new_queryidx = new_point.queryIdx
+                if _queryIdx == new_queryidx:
+                    queryidx_list[len(queryidx_list) - 1].append(new_point)
+                else:
+                    break
+        print(time.time() - start)
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow(
+        #     'goods')
+        test_2 = []
+        for v in queryidx_list:
+            sch_keypoint = kp_sch[v[0].queryIdx]
+            test_2.append([])
+            for match in v:
+                src_keypoint = kp_src[match.trainIdx]
+                angle = abs(src_keypoint.angle - sch_keypoint.angle) / 360
+                size = src_keypoint.size / sch_keypoint.size
+                test_2[len(test_2) - 1].append((angle, size))
+        # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow(
+        #     'matches')
+        # index = 0
+        # for i in queryid_list:
+        #     print(test_2[index])
+        #     index += 1
+        #     for v in i:
+        #         cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (v,), None, flags=2))
+        #         cv2.waitKey(0)
+
         rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=good)
-        cv2.waitKey(0)
         return rect, matches, good
 
-    def match_keypoint(self, des_sch, des_src, k=2):
+    def match_keypoint(self, des_sch, des_src, k=12):
         """
         特征点匹配
 
@@ -124,7 +159,7 @@ class BaseKeypoint(object):
             List[List[cv2.DMatch]]: 包含最匹配的描述符
         """
         # k=2表示每个特征点取出2个最匹配的对应点
-        matches = self.matcher.knnMatch(des_sch, des_src, 2)
+        matches = self.matcher.knnMatch(des_sch, des_src, k)
         return matches
 
     def get_good_in_matches(self, matches):
@@ -137,11 +172,14 @@ class BaseKeypoint(object):
         Returns:
             List[cv2.DMatch]: 过滤后的描述符集
         """
+        if not matches:
+            return None
         good = []
-
-        for m, n in matches:
-            if m.distance < self.FILTER_RATIO * n.distance:
-                good.append(m)
+        for match_index in range(len(matches)):
+            match = matches[match_index]
+            for DMatch_index in range(len(match)):
+                if match[DMatch_index].distance < self.FILTER_RATIO * match[-1].distance:
+                    good.append(match[DMatch_index])
         return good
 
     def extract_good_points(self, im_source, im_search, kp_src, kp_sch, good):
