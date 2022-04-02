@@ -3,11 +3,12 @@
 import cv2
 import numpy as np
 import time
+import math
 from baseImage import Image, Rect
 from baseImage.constant import Place
 
 from image_registration.matching import MatchTemplate
-from image_registration.utils import generate_result
+from image_registration.utils import generate_result, keypoint_distance, keypoint_angle
 from image_registration.exceptions import NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError
 from typing import Union, Tuple, List
 
@@ -97,11 +98,15 @@ class BaseKeypoint(object):
         Returns:
             rect, matches, good
         """
+
         matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
         good = self.get_good_in_matches(matches=matches)
         # 按照queryIdx排升序
-        start = time.time()
         good = sorted(good, key=lambda x: x.queryIdx)
+        print(f'good={len(good)}, kp_src={len(kp_src)}, kp_sch={len(kp_sch)}')
+        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src,
+                                           good, None, flags=2))
+        cv2.waitKey(0)
         # 筛选重复的queryidx
         queryidx_list = []
         queryidx_index = 0
@@ -121,28 +126,42 @@ class BaseKeypoint(object):
                     queryidx_list[len(queryidx_list) - 1].append(new_point)
                 else:
                     break
-        print(time.time() - start)
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow(
-        #     'goods')
-        test_2 = []
-        for v in queryidx_list:
-            sch_keypoint = kp_sch[v[0].queryIdx]
-            test_2.append([])
-            for match in v:
-                src_keypoint = kp_src[match.trainIdx]
-                angle = abs(src_keypoint.angle - sch_keypoint.angle) / 360
-                size = src_keypoint.size / sch_keypoint.size
-                test_2[len(test_2) - 1].append((angle, size))
+
+        queryidx_index_list = [i[0].queryIdx for i in queryidx_list]
+        test_good = sorted(good, key=lambda x: x.distance)
+        first_good_point = test_good[0]
+
+        first_good_point_sch_angle = []
+        for i in kp_sch:
+            first_good_point_sch_angle.append(keypoint_angle(kp1=kp_sch[10], kp2=i))
+
+        first_good_point_src_angle = []
+        first_good_point_train = kp_src[first_good_point.trainIdx]
+        for index in range(len(queryidx_list)):
+            _angle = []
+            if index == queryidx_index_list.index(first_good_point.queryIdx):  # 如果是同sch的,则跳过
+                first_good_point_src_angle.append(np.array(_angle))
+                continue
+            for v in queryidx_list[index]:
+                _angle.append(keypoint_angle(kp1=first_good_point_train, kp2=kp_src[v.trainIdx]))
+            first_good_point_src_angle.append(np.array(_angle))
+
+        test_match_points = [first_good_point]
+        for index in range(len(first_good_point_src_angle[:4])):
+            if index == queryidx_index_list.index(first_good_point.queryIdx):
+                continue
+            sch_angle = first_good_point_sch_angle[queryidx_index_list[index]]
+            selected_src_angle = first_good_point_src_angle[index]
+            _index = np.argmin(np.abs(selected_src_angle) - sch_angle)
+            point = queryidx_list[index][_index]
+            test_match_points.append(point)
+        print(len(test_match_points))
+        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src,
+                                               test_match_points, None, flags=2))
+        cv2.waitKey(0)
+
         # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow(
         #     'matches')
-        # index = 0
-        # for i in queryid_list:
-        #     print(test_2[index])
-        #     index += 1
-        #     for v in i:
-        #         cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (v,), None, flags=2))
-        #         cv2.waitKey(0)
-
         rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=good)
         return rect, matches, good
 
