@@ -30,3 +30,46 @@ def keypoint_angle(kp1: cv2.KeyPoint, kp2: cv2.KeyPoint):
         return 0
     else:
         return abs(k[0] - k[1])
+
+
+def get_keypoint_from_matches(kp, matches, mode):
+    res = []
+    if mode == 'query':
+        for match in matches:
+            res.append(kp[match.queryIdx])
+    elif mode == 'train':
+        for match in matches:
+            res.append(kp[match.trainIdx])
+    return res
+
+
+def keypoint_origin_angle(kp1: cv2.KeyPoint, kp2: cv2.KeyPoint):
+    """
+    以kp1为原点,计算kp2的旋转角度
+    """
+    origin_point = kp1.pt
+    train_point = kp2.pt
+
+    point = (abs(origin_point[0] - train_point[0]), abs(origin_point[1] - train_point[1]))
+
+    x_quadrant = (1, 4)
+    y_quadrant = (3, 4)
+    if origin_point[0] > train_point[0]:
+        x_quadrant = (2, 3)
+
+    if origin_point[1] > train_point[1]:
+        y_quadrant = (1, 2)
+    point_quadrant = list(set(x_quadrant).intersection(set(y_quadrant)))[0]
+
+    x, y = point[::-1]
+    angle = math.degrees(math.atan2(x, y))
+    if point_quadrant == 4:
+        angle = angle
+    elif point_quadrant == 3:
+        angle = 180 - angle
+    elif point_quadrant == 2:
+        angle = 180 + angle
+    elif point_quadrant == 1:
+        angle = 360 - angle
+
+    return angle

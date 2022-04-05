@@ -2,13 +2,14 @@
 # -*- coding:utf-8 -*-
 import cv2
 import numpy as np
+import cupy as cp
 import time
 import math
-from baseImage import Image, Rect
+from baseImage import Image, Rect, Point
 from baseImage.constant import Place
 
 from image_registration.matching import MatchTemplate
-from image_registration.utils import generate_result, keypoint_distance, keypoint_angle
+from image_registration.utils import generate_result, keypoint_distance, keypoint_angle, get_keypoint_from_matches, keypoint_origin_angle
 from image_registration.exceptions import NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError
 from typing import Union, Tuple, List
 
@@ -98,23 +99,38 @@ class BaseKeypoint(object):
         Returns:
             rect, matches, good
         """
-
         matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
         good = self.get_good_in_matches(matches=matches)
         # 按照queryIdx排升序
         good = sorted(good, key=lambda x: x.queryIdx)
         print(f'good={len(good)}, kp_src={len(kp_src)}, kp_sch={len(kp_sch)}')
-        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src,
-                                           good, None, flags=2))
-        cv2.waitKey(0)
+        # _test = []
+        # r = Rect(1039, 25, 63, 69)
+        # for i in good:
+        #     point = kp_src[i.trainIdx]
+        #     if r.contains(Point(point.pt[0], point.pt[1])):
+        #         _test.append(i)
+        # for i in matches[2]:
+        #     print('distance={}, train={}, query={}'.format(i.distance, i.trainIdx, i.queryIdx))
+        #     Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (i,), None, flags=2)).imshow(
+        #         'goods')
+        #     cv2.waitKey(0)
+        # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow(
+        #     'matches')
         # 筛选重复的queryidx
         queryidx_list = []
+        # queryidx_list的索引对应的queryidx
+        queryidx_index_list = []
         queryidx_index = 0
         queryidx_flag = True
+        # 假设第一个点,及distance最小的点,为基准点
+        first_good_point = good[0]  # 随便填一个用于对比
         while queryidx_flag:
             point = good[queryidx_index]
             _queryIdx = point.queryIdx
-            queryidx_list.append([point])
+            queryidx_index_list.append(_queryIdx)
+            first_good_point = first_good_point if point.distance > first_good_point.distance else point
+            point_list = [point]
             while True:
                 queryidx_index += 1
                 if queryidx_index == len(good):
@@ -123,49 +139,92 @@ class BaseKeypoint(object):
                 new_point = good[queryidx_index]
                 new_queryidx = new_point.queryIdx
                 if _queryIdx == new_queryidx:
-                    queryidx_list[len(queryidx_list) - 1].append(new_point)
+                    point_list.append(new_point)
                 else:
                     break
+            queryidx_list.append(np.array(point_list))
 
-        queryidx_index_list = [i[0].queryIdx for i in queryidx_list]
-        test_good = sorted(good, key=lambda x: x.distance)
-        first_good_point = test_good[0]
+        first_good_point_train: cv2.KeyPoint = kp_src[first_good_point.trainIdx]
+        first_good_point_query: cv2.KeyPoint = kp_sch[first_good_point.queryIdx]
+        first_good_point_query_index = queryidx_index_list.index(first_good_point.queryIdx)
+        first_good_point_angle = first_good_point_train.angle - first_good_point_query.angle
+        # Image(cv2.drawKeypoints(im_search.data, (kp_sch[12], kp_sch[11]), im_search.data, color=(255, 0, 255))).\
+        #     imshow('sch')
 
-        first_good_point_sch_angle = []
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
+        #     imshow('first_good')
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('goods')
+        # cv2.waitKey(0)
+        # for i in queryidx_list:
+        #     Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, i, None, flags=2)).imshow('good')
+        #     cv2.waitKey(0)
+
+        # 计算模板图像上,该点与其他特征点的夹角
+        first_good_point_sch_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in kp_sch]
+        first_good_point_sch_origin_angle = []
         for i in kp_sch:
-            first_good_point_sch_angle.append(keypoint_angle(kp1=kp_sch[10], kp2=i))
+            _angle = keypoint_origin_angle(kp1=first_good_point_query, kp2=i)
+            if _angle != 0:
+                _angle = _angle - first_good_point_query.angle
+            first_good_point_sch_origin_angle.append(_angle)
 
-        first_good_point_src_angle = []
-        first_good_point_train = kp_src[first_good_point.trainIdx]
-        for index in range(len(queryidx_list)):
-            _angle = []
-            if index == queryidx_index_list.index(first_good_point.queryIdx):  # 如果是同sch的,则跳过
-                first_good_point_src_angle.append(np.array(_angle))
-                continue
-            for v in queryidx_list[index]:
-                _angle.append(keypoint_angle(kp1=first_good_point_train, kp2=kp_src[v.trainIdx]))
-            first_good_point_src_angle.append(np.array(_angle))
+        # 计算目标图像中,该点与其他特征点的夹角
+        good_point = []
+        for i in queryidx_list:
+            query_point = kp_sch[i[0].queryIdx]
+            # 根据first_good_point的旋转,计算其他特征点旋转后的角度
+            query_rotate_angle = query_point.angle + first_good_point_angle
+            train_points = get_keypoint_from_matches(kp_src, i, 'train')
+            train_points_angle = np.array([i.angle for i in train_points])
+            if query_rotate_angle >= 360:
+                query_rotate_angle -= 360
+            angle_gap = np.abs(train_points_angle - query_rotate_angle)
+            sort_angle_gap = np.argsort(angle_gap)
+            test_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in train_points]
+            good_point.append(i[sort_angle_gap[0]])
 
-        test_match_points = [first_good_point]
-        for index in range(len(first_good_point_src_angle[:4])):
-            if index == queryidx_index_list.index(first_good_point.queryIdx):
-                continue
-            sch_angle = first_good_point_sch_angle[queryidx_index_list[index]]
-            selected_src_angle = first_good_point_src_angle[index]
-            _index = np.argmin(np.abs(selected_src_angle) - sch_angle)
-            point = queryidx_list[index][_index]
-            test_match_points.append(point)
-        print(len(test_match_points))
-        cv2.imshow('good', cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src,
-                                               test_match_points, None, flags=2))
-        cv2.waitKey(0)
+        good_point_keypoint = get_keypoint_from_matches(kp_src, good_point, 'train')
+        good_point_angle = []
+        for i in good_point_keypoint:
+            _angle = keypoint_origin_angle(kp1=first_good_point_train, kp2=i)
+            if _angle != 0:
+                _angle = _angle - first_good_point_train.angle
+            good_point_angle.append(_angle)
 
-        # Image(cv2.drawMatchesKnn(im_search.data, kp_sch, im_source.data, kp_src, matches, None, flags=2)).imshow(
-        #     'matches')
-        rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=good)
+        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good_point, None, flags=2)).imshow('match_goods')
+
+        for i in good_point:
+            Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (i, ), None, flags=2)).imshow('good')
+            cv2.waitKey(0)
+
+        exit()
+        # first_good_point_src_angle = []  3 4 5 6 7
+        # for index in range(len(queryidx_list)):
+        #     _angle = []
+        #     if index == first_good_point_query_index:  # 如果是同sch的,则跳过
+        #         first_good_point_src_angle.append(np.array(_angle))
+        #         continue
+        #     for v in queryidx_list[index]:
+        #         _angle.append(keypoint_angle(kp1=first_good_point_train, kp2=kp_src[v.trainIdx]))
+        #     first_good_point_src_angle.append(np.array(_angle))
+        #
+        # match_point = [first_good_point]
+        # for index in range(len(first_good_point_src_angle)):
+        #     if index == first_good_point_query_index:
+        #         continue
+        #
+        #     sch_angle = first_good_point_sch_angle[queryidx_index_list[index]]
+        #     selected_src_angle = first_good_point_src_angle[index]
+        #     angle_gap = np.abs(selected_src_angle - sch_angle)
+        #     _index = np.argmin(angle_gap)
+        #     # print(np.where(selected_src_angle == selected_src_angle[_index]))
+        #     point = queryidx_list[index][_index]
+        #     match_point.append(point)
+
+        rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=_test)
         return rect, matches, good
 
-    def match_keypoint(self, des_sch, des_src, k=12):
+    def match_keypoint(self, des_sch, des_src, k=20):
         """
         特征点匹配
 
@@ -197,7 +256,7 @@ class BaseKeypoint(object):
         for match_index in range(len(matches)):
             match = matches[match_index]
             for DMatch_index in range(len(match)):
-                if match[DMatch_index].distance < self.FILTER_RATIO * match[-1].distance:
+                if match[DMatch_index].distance <= self.FILTER_RATIO * match[-1].distance:
                     good.append(match[DMatch_index])
         return good
 
@@ -252,7 +311,10 @@ class BaseKeypoint(object):
             dst = cv2.perspectiveTransform(pts, M)
         except cv2.error as err:
             raise PerspectiveTransformError(err)
-
+        img = im_source.data.copy()
+        img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        Image(img).imshow()
+        cv2.waitKey(0)
         def cal_rect_pts(_dst):
             return [tuple(npt[0]) for npt in np.rint(_dst).astype(np.float).tolist()]
 
