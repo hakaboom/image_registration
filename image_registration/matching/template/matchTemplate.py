@@ -198,8 +198,15 @@ class MatchTemplate(object):
         return min(bgr_confidence)
 
     def cal_ccoeff_confidence(self, im_source: Image, im_search: Image):
-        img_src_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
-        img_sch_gray = im_search.cvtColor(cv2.COLOR_BGR2GRAY).data
+        if im_source.channels == 3:
+            img_src_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
+        else:
+            img_src_gray = im_source.data
+
+        if im_search.channels == 3:
+            img_sch_gray = im_search.cvtColor(cv2.COLOR_BGR2GRAY).data
+        else:
+            img_sch_gray = im_search.data
 
         res_temp = self.match(img_sch_gray, img_src_gray)
         min_val, max_val, min_loc, max_loc = self.minMaxLoc(res_temp)

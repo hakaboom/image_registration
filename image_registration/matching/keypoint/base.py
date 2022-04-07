@@ -59,9 +59,9 @@ class BaseKeypoint(object):
         im_source, im_search = self.input_image_check(im_source, im_search)
         if im_source.channels == 1:
             rgb = False
-
         kp_src, des_src = self.get_keypoint_and_descriptor(image=im_source)
         kp_sch, des_sch = self.get_keypoint_and_descriptor(image=im_search)
+
         # 在特征点集中,匹配最接近的特征点
         rect, matches, good = self.get_rect_from_good_matches(im_source=im_source, im_search=im_search, kp_src=kp_src, des_src=des_src,
                                                               kp_sch=kp_sch, des_sch=des_sch)
@@ -143,8 +143,8 @@ class BaseKeypoint(object):
         first_good_point_query_index = queryidx_index_list.index(first_good_point.queryIdx)
         first_good_point_angle = first_good_point_train.angle - first_good_point_query.angle
 
-        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
-            imshow('first_good')
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
+        #     imshow('first_good')
 
         # 计算模板图像上,该点与其他特征点的夹角
         # first_good_point_sch_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in kp_sch]
@@ -187,9 +187,10 @@ class BaseKeypoint(object):
                     ret_keypoint_pt.append(keypoint.pt)
                     ret.append(good_point[i])
 
-        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, ret, None, flags=2)).imshow('ret')
-        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, ret, None, flags=2)).imshow('ret')
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
         # cv2.waitKey(0)
+        # print(time.time() - start)
         rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=ret)
         return rect, matches, good
 
@@ -280,10 +281,10 @@ class BaseKeypoint(object):
             dst = cv2.perspectiveTransform(pts, M)
         except cv2.error as err:
             raise PerspectiveTransformError(err)
-        img = im_source.clone().data
-        img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        Image(img).imshow()
-        # cv2.waitKey(0)
+        # img = im_source.clone().data
+        # img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        # Image(img).imshow()
+        # # cv2.waitKey(0)
         def cal_rect_pts(_dst):
             return [tuple(npt[0]) for npt in np.rint(_dst).astype(np.float).tolist()]
 
@@ -341,7 +342,6 @@ class BaseKeypoint(object):
         assert im_source.place == im_search.place, '输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place)
         assert im_source.dtype == im_search.dtype, '输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype)
         assert im_source.channels == im_search.channels, '输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels)
-
         return im_source, im_search
 
     def _image_check(self, data):
