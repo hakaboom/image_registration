@@ -18,5 +18,6 @@ good_match_type = List[cv2.DMatch]
 class SIFT(BaseKeypoint):
     FLANN_INDEX_KDTREE: int = 0
 
-    def __init__(self, nfeatures: int = 0, nOctaveLayers: int = 3, contrastThreshold: float = 0.04,
+    def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True,
+                 nfeatures: int = 0, nOctaveLayers: int = 3, contrastThreshold: float = 0.04,
                  edgeThreshold: int = 10, sigma: float = 1.6): ...

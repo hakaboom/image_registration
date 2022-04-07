@@ -69,7 +69,6 @@ class BaseKeypoint(object):
             return None
         # 根据识别的结果,从待匹配图像中截取范围,进行模板匹配求出相似度
         confidence = self._cal_confidence(im_source=im_source, im_search=im_search, crop_rect=rect, rgb=rgb)
-        print(confidence)
         best_match = generate_result(rect=rect, confi=confidence)
         return best_match if confidence > threshold else None
 
@@ -105,9 +104,9 @@ class BaseKeypoint(object):
         good = self.get_good_in_matches(matches=matches)
         # 按照queryIdx排升序
         good = sorted(good, key=lambda x: x.queryIdx)
-        print(f'good={len(good)}, kp_src={len(kp_src)}, kp_sch={len(kp_sch)}')
+        # print(f'good={len(good)}, kp_src={len(kp_src)}, kp_sch={len(kp_sch)}')
         # _test = []
-        # r = Rect(1039, 25, 63, 69)
+        # r = Rect(1041, 667, 139, 116)
         # for i in good:
         #     point = kp_src[i.trainIdx]
         #     if r.contains(Point(point.pt[0], point.pt[1])):
@@ -144,8 +143,8 @@ class BaseKeypoint(object):
         first_good_point_query_index = queryidx_index_list.index(first_good_point.queryIdx)
         first_good_point_angle = first_good_point_train.angle - first_good_point_query.angle
 
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
-        #     imshow('first_good')
+        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
+            imshow('first_good')
 
         # 计算模板图像上,该点与其他特征点的夹角
         # first_good_point_sch_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in kp_sch]
@@ -174,6 +173,7 @@ class BaseKeypoint(object):
         # 计算各点以first_good_point为原点的旋转角
         good_point_keypoint = get_keypoint_from_matches(kp_src, good_point, 'train')
         ret_keypoint = []
+        ret_keypoint_pt = []
         ret = []
         origin_angle_threshold = round(5 / 360, 2) * 100  # 允许的偏差值,x表示角度 round(x / 360, 2) * 100
         for i, keypoint in enumerate(good_point_keypoint):
@@ -182,11 +182,13 @@ class BaseKeypoint(object):
                 _angle = _angle - first_good_point_train.angle
             sch_origin_angle = first_good_point_sch_origin_angle[queryidx_index_list[i]]
             if round(abs(_angle - sch_origin_angle) / 360, 2) * 100 < origin_angle_threshold:
-                ret_keypoint.append(keypoint)
-                ret.append(good_point[i])
+                if keypoint.pt not in ret_keypoint_pt:  # 去重
+                    ret_keypoint.append(keypoint)
+                    ret_keypoint_pt.append(keypoint.pt)
+                    ret.append(good_point[i])
 
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, ret, None, flags=2)).imshow('ret')
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
+        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, ret, None, flags=2)).imshow('ret')
+        Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
         # cv2.waitKey(0)
         rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=ret)
         return rect, matches, good
@@ -278,9 +280,9 @@ class BaseKeypoint(object):
             dst = cv2.perspectiveTransform(pts, M)
         except cv2.error as err:
             raise PerspectiveTransformError(err)
-        # img = im_source.data.copy()
-        # img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        # Image(img).imshow()
+        img = im_source.clone().data
+        img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        Image(img).imshow()
         # cv2.waitKey(0)
         def cal_rect_pts(_dst):
             return [tuple(npt[0]) for npt in np.rint(_dst).astype(np.float).tolist()]
@@ -324,7 +326,6 @@ class BaseKeypoint(object):
 
         h, w = im_search.size
         target_img.resize(w, h)
-
         if rgb:
             confidence = self.template.cal_rgb_confidence(im_source=im_search, im_search=target_img)
         else:

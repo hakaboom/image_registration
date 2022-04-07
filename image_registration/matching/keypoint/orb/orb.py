@@ -54,19 +54,6 @@ class ORB(BaseKeypoint):
         descriptor = cv2.xfeatures2d.BEBLID_create(0.75)
         return descriptor
 
-    def get_good_in_matches(self, matches: list):
-        """
-        特征点过滤
-        :param matches: 特征点集
-        """
-        good = []
-        # 出现过matches对中只有1个参数的情况,会导致遍历的时候造成报错
-        for v in matches:
-            if len(v) == 2:
-                if v[0].distance < self.FILTER_RATIO * v[1].distance:
-                    good.append(v[0])
-        return good
-
     def get_keypoints_and_descriptors(self, image: np.ndarray):
         """
         获取图像关键点(keypoints)与描述符(descriptors)
