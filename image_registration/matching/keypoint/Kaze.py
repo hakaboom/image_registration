@@ -45,5 +45,4 @@ class Kaze(BaseKeypoint):
             cv2.KAZE
         """
         detector = cv2.KAZE_create()
-        print(dir(detector), 'kaze')
         return detector

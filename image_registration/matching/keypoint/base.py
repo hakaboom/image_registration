@@ -2,7 +2,6 @@
 # -*- coding:utf-8 -*-
 import cv2
 import numpy as np
-import cupy as cp
 import time
 import math
 from baseImage import Image, Rect, Point
@@ -63,14 +62,72 @@ class BaseKeypoint(object):
         kp_sch, des_sch = self.get_keypoint_and_descriptor(image=im_search)
 
         # 在特征点集中,匹配最接近的特征点
-        rect, matches, good = self.get_rect_from_good_matches(im_source=im_source, im_search=im_search, kp_src=kp_src, des_src=des_src,
-                                                              kp_sch=kp_sch, des_sch=des_sch)
-        if not rect:
+        matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
+        good = self.get_good_in_matches(matches=matches)
+        filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
+        rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src, kp_sch=kp_sch,
+                                                    good=filtered_good_point, angle=angle, rgb=rgb)
+
+        if not rect or confidence < threshold:
             return None
-        # 根据识别的结果,从待匹配图像中截取范围,进行模板匹配求出相似度
-        confidence = self._cal_confidence(im_source=im_source, im_search=im_search, crop_rect=rect, rgb=rgb)
-        best_match = generate_result(rect=rect, confi=confidence)
-        return best_match if confidence > threshold else None
+        return rect
+
+    def find_all_result(self, im_source, im_search, threshold=None, rgb=None, max_count=10):
+        """
+        通过特征点匹配,在im_source中找到全部符合im_search的范围
+
+        Args:
+            im_source: 待匹配图像
+            im_search: 图片模板
+            threshold: 识别阈值(0~1)
+            rgb: 是否使用rgb通道进行校验
+            max_count: 最多可以返回的匹配数量
+
+        Returns:
+
+        """
+        threshold = threshold or self.threshold
+        rgb = rgb or self.rgb
+
+        im_source, im_search = self.input_image_check(im_source, im_search)
+        result = []
+        if im_source.channels == 1:
+            rgb = False
+        kp_src, des_src = self.get_keypoint_and_descriptor(image=im_source)
+        kp_sch, des_sch = self.get_keypoint_and_descriptor(image=im_search)
+
+        # 在特征点集中,匹配最接近的特征点
+        matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
+        good = self.get_good_in_matches(matches=matches)
+        max_iter_counts = 0
+        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
+        # cv2.waitKey(0)
+        while True:
+            if len(good) == 0:
+                break
+
+            if len(result) == max_count:
+                break
+
+            # if max_iter_counts >= 20:
+            #     break
+            max_iter_counts += 1
+            filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
+            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_point,), None, flags=2)).imshow('ret')
+            # cv2.waitKey(0)
+            rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
+                                                        kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
+            if rect and confidence > threshold:
+                # 移除改范围内的所有特征点 ??有可能因为透视变换的原因，删除了多余的特征点\
+                for reverse_index in range((len(good) - 1), -1, -1):
+                    point = kp_src[good[reverse_index].trainIdx].pt
+                    if rect.contains(Point(point[0], point[1])):
+                        good.pop(reverse_index)
+                result.append(generate_result(rect, confidence))
+            else:
+                for match in filtered_good_point:
+                    good.pop(good.index(match))
+        return result
 
     def get_keypoint_and_descriptor(self, image: Image):
         """
@@ -92,25 +149,47 @@ class BaseKeypoint(object):
             raise NoEnoughPointsError('{} detect not enough feature points in input images'.format(self.METHOD_NAME))
         return keypoint, descriptor
 
-    def get_rect_from_good_matches(self, im_source, im_search, kp_src, des_src, kp_sch, des_sch):
-        """
-        从特征点里获取最佳的范围
-
-        Returns:
-            rect, matches, good
-        """
-        start = time.time()
-        matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
-        good = self.get_good_in_matches(matches=matches)
+    def get_queryidx_list(self, good, kp_src, kp_sch):
+        """根据queryidx,生成新的列表"""
         # 按照queryIdx排升序
         good = sorted(good, key=lambda x: x.queryIdx)
-        # print(f'good={len(good)}, kp_src={len(kp_src)}, kp_sch={len(kp_sch)}')
-        # _test = []
-        # r = Rect(1041, 667, 139, 116)
-        # for i in good:
-        #     point = kp_src[i.trainIdx]
-        #     if r.contains(Point(point.pt[0], point.pt[1])):
-        #         _test.append(i)
+        # 筛选重复的queryidx
+        queryidx_list = []
+        # queryidx_list的索引对应的queryidx
+        queryidx_index_list = []
+        queryidx_index = 0
+        queryidx_flag = True
+        while queryidx_flag:
+            point = good[queryidx_index]
+            _queryIdx = point.queryIdx
+            queryidx_index_list.append(_queryIdx)
+            point_list = [point]
+            while True:
+                queryidx_index += 1
+                if queryidx_index == len(good):
+                    queryidx_flag = False
+                    break
+                new_point = good[queryidx_index]
+                new_queryidx = new_point.queryIdx
+                if _queryIdx == new_queryidx:
+                    point_list.append(new_point)
+                else:
+                    break
+            queryidx_list.append(point_list)
+
+        first_good_point = sorted([i[0] for i in queryidx_list], key=lambda x: x.distance)[0]
+        return queryidx_list, queryidx_index_list, first_good_point
+
+    @staticmethod
+    def filter_good_point(good, kp_src, kp_sch):
+        """
+        筛选最佳点
+
+        Returns:
+
+        """
+        # 按照queryIdx排升序
+        good = sorted(good, key=lambda x: x.queryIdx)
         # 筛选重复的queryidx
         queryidx_list = []
         # queryidx_list的索引对应的queryidx
@@ -136,18 +215,14 @@ class BaseKeypoint(object):
                     point_list.append(new_point)
                 else:
                     break
-            queryidx_list.append(np.array(point_list))
+            queryidx_list.append(point_list)
 
         first_good_point_train: cv2.KeyPoint = kp_src[first_good_point.trainIdx]
         first_good_point_query: cv2.KeyPoint = kp_sch[first_good_point.queryIdx]
         first_good_point_query_index = queryidx_index_list.index(first_good_point.queryIdx)
         first_good_point_angle = first_good_point_train.angle - first_good_point_query.angle
 
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_good_point,), None, flags=2)).\
-        #     imshow('first_good')
-
-        # 计算模板图像上,该点与其他特征点的夹角
-        # first_good_point_sch_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in kp_sch]
+        # 计算模板图像上,该点与其他特征点的旋转角
         first_good_point_sch_origin_angle = []
         for i in kp_sch:
             _angle = keypoint_origin_angle(kp1=first_good_point_query, kp2=i)
@@ -167,14 +242,12 @@ class BaseKeypoint(object):
                 query_rotate_angle -= 360
             angle_gap = np.abs(train_points_angle - query_rotate_angle)
             sort_angle_gap = np.argsort(angle_gap)
-            test_angle = [keypoint_angle(kp1=first_good_point_query, kp2=i) for i in train_points]
             good_point.append(i[sort_angle_gap[0]])
 
         # 计算各点以first_good_point为原点的旋转角
+        ret, ret_keypoint_pt = [], []
+        # ret_keypoint = []
         good_point_keypoint = get_keypoint_from_matches(kp_src, good_point, 'train')
-        ret_keypoint = []
-        ret_keypoint_pt = []
-        ret = []
         origin_angle_threshold = round(5 / 360, 2) * 100  # 允许的偏差值,x表示角度 round(x / 360, 2) * 100
         for i, keypoint in enumerate(good_point_keypoint):
             _angle = keypoint_origin_angle(kp1=first_good_point_train, kp2=keypoint)
@@ -183,18 +256,13 @@ class BaseKeypoint(object):
             sch_origin_angle = first_good_point_sch_origin_angle[queryidx_index_list[i]]
             if round(abs(_angle - sch_origin_angle) / 360, 2) * 100 < origin_angle_threshold:
                 if keypoint.pt not in ret_keypoint_pt:  # 去重
-                    ret_keypoint.append(keypoint)
+                    # ret_keypoint.append(keypoint)
                     ret_keypoint_pt.append(keypoint.pt)
                     ret.append(good_point[i])
 
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, ret, None, flags=2)).imshow('ret')
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
-        # cv2.waitKey(0)
-        # print(time.time() - start)
-        rect = self.extract_good_points(im_source=im_source, im_search=im_search, kp_sch=kp_sch, kp_src=kp_src, good=ret)
-        return rect, matches, good
+        return ret, int(first_good_point_angle), first_good_point
 
-    def match_keypoint(self, des_sch, des_src, k=20):
+    def match_keypoint(self, des_sch, des_src, k=10):
         """
         特征点匹配
 
@@ -230,7 +298,7 @@ class BaseKeypoint(object):
                     good.append(match[DMatch_index])
         return good
 
-    def extract_good_points(self, im_source, im_search, kp_src, kp_sch, good):
+    def extract_good_points(self, im_source, im_search, kp_src, kp_sch, good, angle, rgb):
         """
         根据匹配点(good)数量,提取识别区域
 
@@ -240,24 +308,36 @@ class BaseKeypoint(object):
             kp_src: 关键点集
             kp_sch: 关键点集
             good: 描述符集
+            angle: 旋转角度
+            rgb: 是否使用rgb通道进行校验
 
         Returns:
-
+            范围,和置信度
         """
         len_good = len(good)
+        confidence, rect = None, None
         if len_good in [0, 1]:
-            return None
-        elif len_good in [2, 3]:
+            pass
+        elif len_good == 2:
             # TODO: 待做
             pass
-        else:
-            return self._many_good_pts(im_source=im_source, im_search=im_search,
-                                       kp_sch=kp_sch, kp_src=kp_src, good=good)
+        elif len_good == 3:
+            self._get_warpAffine_image(im_source=im_source, im_search=im_search,
+                                       kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
+        else:  # len > 4
+            target_img, rect = self._get_warpPerspective_image(im_source=im_source, im_search=im_search,
+                                                               kp_sch=kp_sch, kp_src=kp_src, good=good)
+            if target_img:
+                confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
 
-    def _many_good_pts(self, im_source: Image, im_search: Image, kp_sch: List[cv2.KeyPoint], kp_src: List[cv2.KeyPoint],
-                       good: List[cv2.DMatch]) -> Rect:
+        return rect, confidence
+
+    def _get_warpAffine_image(self, im_source, im_search, kp_src, kp_sch, good, angle):
+        pass
+
+    def _get_warpPerspective_image(self, im_source, im_search, kp_src, kp_sch, good):
         """
-        特征点匹配数量>=4时,使用单矩阵映射,求出识别的目标区域
+        使用透视变换,获取识别的目标图片
 
         Args:
             im_source: 待匹配图像
@@ -267,8 +347,9 @@ class BaseKeypoint(object):
             good: 描述符集
 
         Returns:
-
+            透视变换后的图片
         """
+
         sch_pts, img_pts = np.float32([kp_sch[m.queryIdx].pt for m in good]).reshape(
             -1, 1, 2), np.float32([kp_src[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
         # M是转化矩阵
@@ -278,23 +359,28 @@ class BaseKeypoint(object):
         h_s, w_s = im_source.shape[:2]
         pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
         try:
-            dst = cv2.perspectiveTransform(pts, M)
+            dst: np.ndarray = cv2.perspectiveTransform(pts, M)
+            pypts = [tuple(npt[0]) for npt in dst.tolist()]
+            point_1 = np.array([pypts[0], pypts[3], pypts[1], pypts[2]], dtype=np.float32)
+            point_2 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+            matrix = cv2.getPerspectiveTransform(point_1, point_2)
+            output = im_source.warpPerspective(matrix, size=(w, h))  # https://github.com/opencv/opencv/issues/11784
         except cv2.error as err:
+            # Image(
+            #     cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow(
+            #     'ret')
+            # cv2.waitKey(0)
             raise PerspectiveTransformError(err)
-        # img = im_source.clone().data
-        # img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        # Image(img).imshow()
-        # # cv2.waitKey(0)
-        def cal_rect_pts(_dst):
-            return [tuple(npt[0]) for npt in np.rint(_dst).astype(np.float).tolist()]
 
-        pypts = cal_rect_pts(dst)
+        # img = im_source.clone().data
+        # cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        # Image(img).imshow()
+        # cv2.waitKey(0)
         # pypts四个值按照顺序分别是: 左上,左下,右下,右上
-        # 注意：虽然4个角点有可能越出source图边界，但是(根据精确化映射单映射矩阵M线性机制)中点不会越出边界
-        lt, br = pypts[0], pypts[2]
-        # 考虑到算出的目标矩阵有可能是翻转的情况，必须进行一次处理，确保映射后的“左上角”在图片中也是左上角点：
-        x_min, x_max = min(lt[0], br[0]), max(lt[0], br[0])
-        y_min, y_max = min(lt[1], br[1]), max(lt[1], br[1])
+        x = [int(i[0]) for i in pypts]
+        y = [int(i[1]) for i in pypts]
+        x_min, x_max = min(x), max(x)
+        y_min, y_max = min(y), max(y)
         # 挑选出目标矩形区域可能会有越界情况，越界时直接将其置为边界：
         # 超出左边界取0，超出右边界取w_s-1，超出下边界取0，超出上边界取h_s-1
         # 当x_min小于0时，取0。  x_max小于0时，取0。
@@ -305,9 +391,28 @@ class BaseKeypoint(object):
         y_min, y_max = int(max(y_min, 0)), int(max(y_max, 0))
         # 当y_min大于h_s时，取值h_s-1。  y_max大于h_s-1时，取h_s-1。
         y_min, y_max = int(min(y_min, h_s - 1)), int(min(y_max, h_s - 1))
-        return Rect(x=x_min, y=y_min, width=(x_max - x_min), height=(y_max - y_min))
+        rect = Rect(x=x_min, y=y_min, width=(x_max - x_min), height=(y_max - y_min))
+        return output, rect
 
-    def _cal_confidence(self, im_source, im_search, crop_rect: Rect, rgb: bool) -> Union[int, float]:
+    @staticmethod
+    def _target_image_crop(img, rect):
+        """
+        截取目标图像
+
+        Args:
+            img: 图像
+            rect: 图像范围
+
+        Returns:
+            裁剪后的图像
+        """
+        try:
+            target_img = img.crop(rect)
+        except OverflowError:
+            raise MatchResultError(f"Target area({rect}) out of screen{img.size}")
+        return target_img
+
+    def _cal_confidence(self, im_source, im_search, rgb: bool) -> Union[int, float]:
         """
         将截图和识别结果缩放到大小一致,并计算可信度
 
@@ -320,17 +425,12 @@ class BaseKeypoint(object):
         Returns:
 
         """
-        try:
-            target_img = im_source.crop(crop_rect)
-        except OverflowError:
-            raise MatchResultError(f"Target area({crop_rect}) out of screen{im_source.size}")
-
         h, w = im_search.size
-        target_img.resize(w, h)
+        im_search = im_search.resize(w, h)
         if rgb:
-            confidence = self.template.cal_rgb_confidence(im_source=im_search, im_search=target_img)
+            confidence = self.template.cal_rgb_confidence(im_source=im_source, im_search=im_search)
         else:
-            confidence = self.template.cal_ccoeff_confidence(im_source=im_search, im_search=target_img)
+            confidence = self.template.cal_ccoeff_confidence(im_source=im_source, im_search=im_search)
 
         confidence = (1 + confidence) / 2
         return confidence
@@ -349,7 +449,7 @@ class BaseKeypoint(object):
             data = Image(data, dtype=self.Dtype)
 
         if data.place not in self.Place:
-            raise TypeError('Image类型必须为(Place.Mat, Place.UMat, Place.Ndarray)')
+            raise TypeError(f'{self.METHOD_NAME}方法,Image类型必须为(Place.Mat, Place.UMat, Place.Ndarray)')
         return data
 
     @staticmethod

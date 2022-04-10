@@ -7,9 +7,9 @@ from baseImage.constant import Place
 from image_registration.matching.keypoint.base import BaseKeypoint
 
 
-class SIFT(BaseKeypoint):
+class SURF(BaseKeypoint):
     FLANN_INDEX_KDTREE = 0
-    METHOD_NAME = 'SIFT'
+    METHOD_NAME = "SURF"
     Dtype = np.uint8
     Place = (Place.Mat, Place.UMat, Place.Ndarray)
 
@@ -27,12 +27,12 @@ class SIFT(BaseKeypoint):
         return matcher
 
     def create_detector(self, **kwargs) -> cv2.SIFT:
-        nfeatures = kwargs.get('nfeatures', 0)
+        hessianThreshold = kwargs.get('hessianThreshold', 400)
+        nOctaves = kwargs.get('nOctaves', 4)
         nOctaveLayers = kwargs.get('nOctaveLayers', 3)
-        contrastThreshold = kwargs.get('contrastThreshold', 0.04)
-        edgeThreshold = kwargs.get('edgeThreshold', 10)
-        sigma = kwargs.get('sigma', 1.6)
+        extended = kwargs.get('extended', True)
+        upright = kwargs.get('upright', False)
 
-        detector = cv2.SIFT_create(nfeatures=nfeatures, nOctaveLayers=nOctaveLayers, contrastThreshold=contrastThreshold,
-                                   edgeThreshold=edgeThreshold, sigma=sigma)
+        detector = cv2.xfeatures2d.SURF_create(hessianThreshold=hessianThreshold, nOctaves=nOctaves, nOctaveLayers=nOctaveLayers,
+                                               extended=extended, upright=upright)
         return detector
