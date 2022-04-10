@@ -72,7 +72,7 @@ class BaseKeypoint(object):
             return None
         return rect
 
-    def find_all_result(self, im_source, im_search, threshold=None, rgb=None, max_count=10):
+    def find_all_result(self, im_source, im_search, threshold=None, rgb=None, max_count=10, max_iter_counts=20, distance_threshold=150):
         """
         通过特征点匹配,在im_source中找到全部符合im_search的范围
 
@@ -82,12 +82,14 @@ class BaseKeypoint(object):
             threshold: 识别阈值(0~1)
             rgb: 是否使用rgb通道进行校验
             max_count: 最多可以返回的匹配数量
+            max_iter_counts: 最大的搜索次数,需要大于max_count
+            distance_threshold: 距离阈值,特征点(first_point)大于该阈值后,不做后续筛选
 
         Returns:
 
         """
-        threshold = threshold or self.threshold
-        rgb = rgb or self.rgb
+        threshold = self.threshold if threshold is None else threshold
+        rgb = self.rgb if rgb is None else rgb
 
         im_source, im_search = self.input_image_check(im_source, im_search)
         result = []
@@ -99,9 +101,8 @@ class BaseKeypoint(object):
         # 在特征点集中,匹配最接近的特征点
         matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
         good = self.get_good_in_matches(matches=matches)
-        max_iter_counts = 0
-        # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow('good')
-        # cv2.waitKey(0)
+        _max_iter_counts = 0
+
         while True:
             if len(good) == 0:
                 break
@@ -109,25 +110,32 @@ class BaseKeypoint(object):
             if len(result) == max_count:
                 break
 
-            # if max_iter_counts >= 20:
-            #     break
-            max_iter_counts += 1
+            if _max_iter_counts >= max_iter_counts:
+                break
+
+            _max_iter_counts += 1
 
             filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, filtered_good_point, None, flags=2)).imshow('ret')
-            # cv2.waitKey(0)
-            rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
-                                                        kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
-            if rect and confidence > threshold:
-                # 移除改范围内的所有特征点 ??有可能因为透视变换的原因，删除了多余的特征点\
-                for reverse_index in range((len(good) - 1), -1, -1):
-                    point = kp_src[good[reverse_index].trainIdx].pt
-                    if rect.contains(Point(point[0], point[1])):
-                        good.pop(reverse_index)
-                result.append(generate_result(rect, confidence))
-            else:
-                for match in filtered_good_point:
-                    good.pop(good.index(match))
+            if first_point.distance > distance_threshold:
+                break
+
+            rect, confidence = None, 0
+            try:
+                rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
+                                                            kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
+            except PerspectiveTransformError:
+                pass
+            finally:
+                if rect and confidence >= threshold:
+                    # 移除改范围内的所有特征点 ??有可能因为透视变换的原因，删除了多余的特征点
+                    for reverse_index in range((len(good) - 1), -1, -1):
+                        point = kp_src[good[reverse_index].trainIdx].pt
+                        if rect.contains(Point(point[0], point[1])):
+                            good.pop(reverse_index)
+                    result.append(generate_result(rect, confidence))
+                else:
+                    for match in filtered_good_point:
+                        good.pop(good.index(match))
         return result
 
     def get_keypoint_and_descriptor(self, image: Image):
@@ -166,13 +174,13 @@ class BaseKeypoint(object):
         queryidx_index_list = []
         queryidx_index = 0
         queryidx_flag = True
-        # 假设第一个点,及distance最小的点,为基准点
-        first_good_point = good[0]  # 随便填一个用于对比
+
+        # first_good_point = good[0]  # 随便填一个用于对比
         while queryidx_flag:
             point = good[queryidx_index]
             _queryIdx = point.queryIdx
             queryidx_index_list.append(_queryIdx)
-            first_good_point = first_good_point if point.distance > first_good_point.distance else point
+            # first_good_point = first_good_point if point.distance > first_good_point.distance else point
             point_list = [point]
             while True:
                 queryidx_index += 1
@@ -186,6 +194,10 @@ class BaseKeypoint(object):
                 else:
                     break
             queryidx_list.append(point_list)
+
+        # 假设第一个点,及distance最小的点,为基准点
+        distance_good = sorted(good, key=lambda x: x.distance)
+        first_good_point = distance_good[0]
 
         first_good_point_train: cv2.KeyPoint = kp_src[first_good_point.trainIdx]
         first_good_point_query: cv2.KeyPoint = kp_sch[first_good_point.queryIdx]
@@ -302,9 +314,6 @@ class BaseKeypoint(object):
                 confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
 
         return rect, confidence
-
-    def _get_warpAffine_image(self, im_source, im_search, kp_src, kp_sch, good, angle):
-        pass
 
     def _get_warpPerspective_image(self, im_source, im_search, kp_src, kp_sch, good):
         """
