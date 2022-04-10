@@ -16,7 +16,7 @@ a = SIFT()
 
 #
 im_source = Image('tests/image/11.png', place=1)
-im_search = Image('tests/image/11.png', place=1).crop(Rect(351,283,151,143))
+im_search = Image('tests/image/11.png', place=1).crop(Rect(366,287,127,89))
 # # im_source.crop(Rect(549, 366, 145, 269)).imwrite('source.png')
 # im_search.imshow('search')
 # # cv2.waitKey(0)

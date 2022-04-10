@@ -112,8 +112,9 @@ class BaseKeypoint(object):
             # if max_iter_counts >= 20:
             #     break
             max_iter_counts += 1
+
             filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, (first_point,), None, flags=2)).imshow('ret')
+            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, filtered_good_point, None, flags=2)).imshow('ret')
             # cv2.waitKey(0)
             rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
                                                         kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
@@ -148,37 +149,6 @@ class BaseKeypoint(object):
         if len(keypoint) < 2:
             raise NoEnoughPointsError('{} detect not enough feature points in input images'.format(self.METHOD_NAME))
         return keypoint, descriptor
-
-    def get_queryidx_list(self, good, kp_src, kp_sch):
-        """根据queryidx,生成新的列表"""
-        # 按照queryIdx排升序
-        good = sorted(good, key=lambda x: x.queryIdx)
-        # 筛选重复的queryidx
-        queryidx_list = []
-        # queryidx_list的索引对应的queryidx
-        queryidx_index_list = []
-        queryidx_index = 0
-        queryidx_flag = True
-        while queryidx_flag:
-            point = good[queryidx_index]
-            _queryIdx = point.queryIdx
-            queryidx_index_list.append(_queryIdx)
-            point_list = [point]
-            while True:
-                queryidx_index += 1
-                if queryidx_index == len(good):
-                    queryidx_flag = False
-                    break
-                new_point = good[queryidx_index]
-                new_queryidx = new_point.queryIdx
-                if _queryIdx == new_queryidx:
-                    point_list.append(new_point)
-                else:
-                    break
-            queryidx_list.append(point_list)
-
-        first_good_point = sorted([i[0] for i in queryidx_list], key=lambda x: x.distance)[0]
-        return queryidx_list, queryidx_index_list, first_good_point
 
     @staticmethod
     def filter_good_point(good, kp_src, kp_sch):
@@ -322,8 +292,9 @@ class BaseKeypoint(object):
             # TODO: 待做
             pass
         elif len_good == 3:
-            self._get_warpAffine_image(im_source=im_source, im_search=im_search,
-                                       kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
+            pass
+            # self._get_warpAffine_image(im_source=im_source, im_search=im_search,
+            #                            kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
         else:  # len > 4
             target_img, rect = self._get_warpPerspective_image(im_source=im_source, im_search=im_search,
                                                                kp_sch=kp_sch, kp_src=kp_src, good=good)
