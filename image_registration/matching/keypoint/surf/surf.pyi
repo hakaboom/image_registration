@@ -21,3 +21,5 @@ class SURF(BaseKeypoint):
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True,
                  hessianThreshold: int = 400, nOctaves: int = 4, nOctaveLayers: int = 3,
                  extended: bool = True, upright: bool = False): ...
+
+    def create_detector(self, **kwargs) -> cv2.xfeatures2d.SURF:

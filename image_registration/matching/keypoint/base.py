@@ -5,12 +5,11 @@ import numpy as np
 import time
 import math
 from baseImage import Image, Rect, Point
-from baseImage.constant import Place
 
 from image_registration.matching import MatchTemplate
-from image_registration.utils import generate_result, keypoint_distance, keypoint_angle, get_keypoint_from_matches, keypoint_origin_angle
+from image_registration.utils import generate_result, get_keypoint_from_matches, keypoint_origin_angle
 from image_registration.exceptions import NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError
-from typing import Union, Tuple, List
+from typing import Union, List
 
 
 class BaseKeypoint(object):
@@ -116,6 +115,9 @@ class BaseKeypoint(object):
             _max_iter_counts += 1
 
             filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
+            # print(first_point.distance)
+            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, filtered_good_point, None, flags=2)).imshow('good')
+            # cv2.waitKey(0)
             if first_point.distance > distance_threshold:
                 break
 

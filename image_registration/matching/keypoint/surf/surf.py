@@ -26,7 +26,7 @@ class SURF(BaseKeypoint):
         matcher = cv2.FlannBasedMatcher(index_params, search_params)
         return matcher
 
-    def create_detector(self, **kwargs) -> cv2.SIFT:
+    def create_detector(self, **kwargs):
         hessianThreshold = kwargs.get('hessianThreshold', 400)
         nOctaves = kwargs.get('nOctaves', 4)
         nOctaveLayers = kwargs.get('nOctaveLayers', 3)
