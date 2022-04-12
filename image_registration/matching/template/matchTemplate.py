@@ -53,6 +53,7 @@ class MatchTemplate(object):
 
         result = self._get_template_result_matrix(im_source=im_source, im_search=im_search)
         # 找到最佳匹配项
+
         min_val, max_val, min_loc, max_loc = self.minMaxLoc(result.data)
         h, w = im_search.size
         # 求可信度
@@ -226,7 +227,7 @@ class MatchTemplate(object):
 class CudaMatchTemplae(MatchTemplate):
     METHOD_NAME = 'tpl'
     Dtype = np.uint8
-    Place = Place.GpuMat
+    Place = (Place.GpuMat, )
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True):
         super(CudaMatchTemplae, self).__init__(threshold=threshold, rgb=rgb)
