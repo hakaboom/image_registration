@@ -69,7 +69,7 @@ class BaseKeypoint(object):
 
         if not rect or confidence < threshold:
             return None
-        return rect
+        return generate_result(rect, confidence)
 
     def find_all_result(self, im_source, im_search, threshold=None, rgb=None, max_count=10, max_iter_counts=20, distance_threshold=150):
         """
