@@ -101,7 +101,7 @@ class MatchTemplate(object):
 
             if (confidence < (threshold or self.threshold)) or len(results) >= max_count:
                 break
-            results.append(rect)
+            results.append(generate_result(rect, confidence))
             result.rectangle(rect=Rect(int(max_loc[0] - w / 2), int(max_loc[1] - h / 2), w, h), color=(0, 0, 0), thickness=-1)
 
         return results if results else None
@@ -183,6 +183,7 @@ class MatchTemplate(object):
             float: 最小置信度
         """
         im_search = im_search.copyMakeBorder(10, 10, 10, 10, cv2.BORDER_REPLICATE)
+
         img_src_hsv = im_source.cvtColor(cv2.COLOR_BGR2HSV)
         img_sch_hsv = im_search.cvtColor(cv2.COLOR_BGR2HSV)
 

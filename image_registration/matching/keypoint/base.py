@@ -115,7 +115,7 @@ class BaseKeypoint(object):
             _max_iter_counts += 1
 
             filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-            # print(first_point.distance)
+            # print(first_point.distance, len(filtered_good_point))
             # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, filtered_good_point, None, flags=2)).imshow('good')
             # cv2.waitKey(0)
             if first_point.distance > distance_threshold:
@@ -138,6 +138,7 @@ class BaseKeypoint(object):
                 else:
                     for match in filtered_good_point:
                         good.pop(good.index(match))
+
         return result
 
     def get_keypoint_and_descriptor(self, image: Image):
@@ -313,6 +314,7 @@ class BaseKeypoint(object):
             target_img, rect = self._get_warpPerspective_image(im_source=im_source, im_search=im_search,
                                                                kp_sch=kp_sch, kp_src=kp_src, good=good)
             if target_img:
+                # target_img.imshow('target_1')
                 confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
 
         return rect, confidence
@@ -342,6 +344,7 @@ class BaseKeypoint(object):
         pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
         try:
             dst: np.ndarray = cv2.perspectiveTransform(pts, M)
+            # dst = dst.astype(np.uint8)
             pypts = [tuple(npt[0]) for npt in dst.tolist()]
             point_1 = np.array([pypts[0], pypts[3], pypts[1], pypts[2]], dtype=np.float32)
             point_2 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
@@ -407,7 +410,7 @@ class BaseKeypoint(object):
         Returns:
 
         """
-        h, w = im_search.size
+        h, w = im_source.size
         im_search = im_search.resize(w, h)
         if rgb:
             confidence = self.template.cal_rgb_confidence(im_source=im_source, im_search=im_search)
