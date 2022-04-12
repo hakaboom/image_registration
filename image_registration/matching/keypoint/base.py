@@ -71,7 +71,7 @@ class BaseKeypoint(object):
             return None
         return generate_result(rect, confidence)
 
-    def find_all_result(self, im_source, im_search, threshold=None, rgb=None, max_count=10, max_iter_counts=20, distance_threshold=150):
+    def find_all_results(self, im_source, im_search, threshold=None, rgb=None, max_count=10, max_iter_counts=20, distance_threshold=150):
         """
         通过特征点匹配,在im_source中找到全部符合im_search的范围
 
