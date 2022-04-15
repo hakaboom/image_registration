@@ -14,6 +14,7 @@ keypoint_type = Tuple[cv2.KeyPoint, ...]
 matches_type = Tuple[Tuple[cv2.DMatch, ...], ...]
 good_match_type = List[cv2.DMatch]
 
+
 class BaseKeypoint(object):
     FILTER_RATIO: int = 0.59
     METHOD_NAME: str
@@ -50,7 +51,11 @@ class BaseKeypoint(object):
 
     def extract_good_points(self, im_source: Image, im_search: Image, kp_src: keypoint_type, kp_sch: keypoint_type, good: good_match_type, angle: float, rgb: bool) -> Union[Optional[Rect], Union[None, int, float]]: ...
 
-    def _get_warpPerspective_image(self, im_source: Image, im_search: Image, kp_src: keypoint_type, kp_sch: keypoint_type, good: good_match_type) -> Tuple[Image, Rect]: ...
+    def _handle_two_good_points(self, im_source: Image, im_search: Image, kp_src: keypoint_type, kp_sch: keypoint_type, good: good_match_type, angle: Union[float, int]) -> Tuple[Image, Rect]: ...
+
+    def _handle_three_good_points(self, im_source: Image, im_search: Image, kp_src: keypoint_type, kp_sch: keypoint_type, good: good_match_type, angle: Union[float, int]) -> Tuple[Image, Rect]: ...
+
+    def _handle_many_good_points(self, im_source: Image, im_search: Image, kp_src: keypoint_type, kp_sch: keypoint_type, good: good_match_type) -> Tuple[Image, Rect]: ...
 
     def _target_image_crop(self, img: Image, rect: Rect) -> Image: ...
 
@@ -62,3 +67,9 @@ class BaseKeypoint(object):
 
     @staticmethod
     def _find_homography(sch_pts: np.ndarray, src_pts: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]: ...
+
+    @staticmethod
+    def _perspective_transform(im_source: Image, im_search: Image, src: np.ndarray, dst: np.ndarray) -> Image: ...
+
+    @staticmethod
+    def _get_perspective_area_rect(im_source: Image, src: np.ndarray) -> Rect:

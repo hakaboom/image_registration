@@ -7,7 +7,8 @@ import math
 from baseImage import Image, Rect, Point
 
 from image_registration.matching import MatchTemplate
-from image_registration.utils import generate_result, get_keypoint_from_matches, keypoint_origin_angle
+from image_registration.utils import (generate_result, get_keypoint_from_matches, keypoint_origin_angle, keypoint_distance,
+                                      rectangle_transform)
 from image_registration.exceptions import NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError
 from typing import Union, List
 
@@ -115,9 +116,7 @@ class BaseKeypoint(object):
             _max_iter_counts += 1
 
             filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-            # print(first_point.distance, len(filtered_good_point))
-            # Image(cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, filtered_good_point, None, flags=2)).imshow('good')
-            # cv2.waitKey(0)
+
             if first_point.distance > distance_threshold:
                 break
 
@@ -300,28 +299,100 @@ class BaseKeypoint(object):
             范围,和置信度
         """
         len_good = len(good)
-        confidence, rect = None, None
+        confidence, rect, target_img = None, None, None
+
         if len_good in [0, 1]:
             pass
         elif len_good == 2:
-            # TODO: 待做
-            pass
+            target_img, rect = self._handle_two_good_points(im_source=im_source, im_search=im_search,
+                                                            kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
         elif len_good == 3:
-            pass
-            # self._get_warpAffine_image(im_source=im_source, im_search=im_search,
-            #                            kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
+            target_img, rect = self._handle_three_good_points(im_source=im_source, im_search=im_search,
+                                                              kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
         else:  # len > 4
-            target_img, rect = self._get_warpPerspective_image(im_source=im_source, im_search=im_search,
-                                                               kp_sch=kp_sch, kp_src=kp_src, good=good)
-            if target_img:
-                # target_img.imshow('target_1')
-                confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
+            target_img, rect = self._handle_many_good_points(im_source=im_source, im_search=im_search,
+                                                             kp_sch=kp_sch, kp_src=kp_src, good=good)
+
+        if target_img:
+            confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
 
         return rect, confidence
 
-    def _get_warpPerspective_image(self, im_source, im_search, kp_src, kp_sch, good):
+    def _handle_two_good_points(self, im_source, im_search, kp_src, kp_sch, good, angle):
         """
-        使用透视变换,获取识别的目标图片
+        特征点匹配数量等于2时,根据两点距离差,对矩形进行缩放,并根据旋转角度,获取识别的目标图片
+
+        Args:
+            im_source: 待匹配图像
+            im_search: 图片模板
+            kp_sch: 关键点集
+            kp_src: 关键点集
+            good: 描述符集
+            angle: 旋转角度
+
+        Returns:
+            待验证的图片
+        """
+        sch_point = get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')
+        src_point = get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')
+
+        sch_distance = keypoint_distance(sch_point[0], sch_point[1])
+        src_distance = keypoint_distance(src_point[0], src_point[1])
+
+        scale = src_distance / sch_distance  # 计算缩放大小
+
+        h, w = im_search.size
+        _h, _w = h * scale, w * scale
+        src = np.float32(rectangle_transform(point=sch_point[0].pt, size=(h, w), mapping_point=src_point[0].pt,
+                                             mapping_size=(_h, _w), angle=angle))
+        dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+        output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
+        rect = self._get_perspective_area_rect(im_source=im_source, src=src)
+        return output, rect
+
+    def _handle_three_good_points(self, im_source, im_search, kp_src, kp_sch, good, angle):
+        """
+        特征点匹配数量等于3时,根据三个点组成的三角面积差,对矩形进行缩放,并根据旋转角度,获取识别的目标图片
+
+        Args:
+            im_source: 待匹配图像
+            im_search: 图片模板
+            kp_sch: 关键点集
+            kp_src: 关键点集
+            good: 描述符集
+            angle: 旋转角度
+
+        Returns:
+            待验证的图片
+        """
+        sch_point = get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')
+        src_point = get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')
+
+        def _area(point_list):
+            p1_2 = keypoint_distance(point_list[0], point_list[1])
+            p1_3 = keypoint_distance(point_list[0], point_list[2])
+            p2_3 = keypoint_distance(point_list[1], point_list[2])
+
+            s = (p1_2 + p1_3 + p2_3) / 2
+            area = (s * (s - p1_2) * (s - p1_3) * (s - p2_3)) ** 0.5
+            return area
+
+        sch_area = _area(sch_point)
+        src_area = _area(src_point)
+        scale = src_area / sch_area  # 计算缩放大小
+
+        h, w = im_search.size
+        _h, _w = h * scale, w * scale
+        src = np.float32(rectangle_transform(point=sch_point[0].pt, size=(h, w), mapping_point=src_point[0].pt,
+                                             mapping_size=(_h, _w), angle=angle))
+        dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+        output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
+        rect = self._get_perspective_area_rect(im_source=im_source, src=src)
+        return output, rect
+
+    def _handle_many_good_points(self, im_source, im_search, kp_src, kp_sch, good):
+        """
+        特征点匹配数量>=4时,使用单矩阵映射,获取识别的目标图片
 
         Args:
             im_source: 待匹配图像
@@ -339,44 +410,27 @@ class BaseKeypoint(object):
         # M是转化矩阵
         M, mask = self._find_homography(sch_pts, img_pts)
         # 计算四个角矩阵变换后的坐标，也就是在大图中的目标区域的顶点坐标:
-        h, w = im_search.shape[:2]
-        h_s, w_s = im_source.shape[:2]
+        h, w = im_search.size
+        h_s, w_s = im_source.size
         pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
         try:
             dst: np.ndarray = cv2.perspectiveTransform(pts, M)
-            # dst = dst.astype(np.uint8)
+            # img = im_source.clone().data
+            # img2 = cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+            # Image(img).imshow('dst')
             pypts = [tuple(npt[0]) for npt in dst.tolist()]
-            point_1 = np.array([pypts[0], pypts[3], pypts[1], pypts[2]], dtype=np.float32)
-            point_2 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
-            matrix = cv2.getPerspectiveTransform(point_1, point_2)
-            output = im_source.warpPerspective(matrix, size=(w, h))  # https://github.com/opencv/opencv/issues/11784
+            src = np.array([pypts[0], pypts[3], pypts[1], pypts[2]], dtype=np.float32)
+            dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+            output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
         except cv2.error as err:
-            # Image(
-            #     cv2.drawMatches(im_search.data, kp_sch, im_source.data, kp_src, good, None, flags=2)).imshow(
-            #     'ret')
-            # cv2.waitKey(0)
             raise PerspectiveTransformError(err)
 
         # img = im_source.clone().data
         # cv2.polylines(img, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
         # Image(img).imshow()
         # cv2.waitKey(0)
-        # pypts四个值按照顺序分别是: 左上,左下,右下,右上
-        x = [int(i[0]) for i in pypts]
-        y = [int(i[1]) for i in pypts]
-        x_min, x_max = min(x), max(x)
-        y_min, y_max = min(y), max(y)
-        # 挑选出目标矩形区域可能会有越界情况，越界时直接将其置为边界：
-        # 超出左边界取0，超出右边界取w_s-1，超出下边界取0，超出上边界取h_s-1
-        # 当x_min小于0时，取0。  x_max小于0时，取0。
-        x_min, x_max = int(max(x_min, 0)), int(max(x_max, 0))
-        # 当x_min大于w_s时，取值w_s-1。  x_max大于w_s-1时，取w_s-1。
-        x_min, x_max = int(min(x_min, w_s - 1)), int(min(x_max, w_s - 1))
-        # 当y_min小于0时，取0。  y_max小于0时，取0。
-        y_min, y_max = int(max(y_min, 0)), int(max(y_max, 0))
-        # 当y_min大于h_s时，取值h_s-1。  y_max大于h_s-1时，取h_s-1。
-        y_min, y_max = int(min(y_min, h_s - 1)), int(min(y_max, h_s - 1))
-        rect = Rect(x=x_min, y=y_min, width=(x_max - x_min), height=(y_max - y_min))
+
+        rect = self._get_perspective_area_rect(im_source=im_source, src=src)
         return output, rect
 
     @staticmethod
@@ -443,7 +497,7 @@ class BaseKeypoint(object):
         多组特征点对时，求取单向性矩阵
         """
         try:
-            M, mask = cv2.findHomography(sch_pts, src_pts, cv2.RANSAC, 5.0)
+            M, mask = cv2.findHomography(sch_pts, src_pts, cv2.RANSAC)
         except cv2.error:
             import traceback
             traceback.print_exc()
@@ -453,3 +507,54 @@ class BaseKeypoint(object):
                 raise HomographyError("In _find_homography(), find no mask...")
             else:
                 return M, mask
+
+    @staticmethod
+    def _perspective_transform(im_source, im_search, src, dst):
+        """
+        根据四对对应点计算透视变换, 并裁剪相应图片
+
+        Args:
+            im_source: 待匹配图像
+            im_search: 待匹配模板
+            src: 目标图像中相应四边形顶点的坐标 (左上,右上,左下,右下)
+            dst: 源图像中四边形顶点的坐标 (左上,右上,左下,右下)
+
+        Returns:
+
+        """
+        h, w = im_search.size
+        matrix = cv2.getPerspectiveTransform(src=src, dst=dst)
+        # warpPerspective https://github.com/opencv/opencv/issues/11784
+        output = im_source.warpPerspective(matrix, size=(w, h), flags=cv2.INTER_NEAREST)
+        return output
+
+    @staticmethod
+    def _get_perspective_area_rect(im_source, src):
+        """
+        根据矩形四个顶点坐标,获取在原图中的最大外接矩形
+
+        Args:
+            im_source: 待匹配图像
+            src: 目标图像中相应四边形顶点的坐标
+
+        Returns:
+            最大外接矩形
+        """
+        h, w = im_source.size
+
+        x = [int(i[0]) for i in src]
+        y = [int(i[1]) for i in src]
+        x_min, x_max = min(x), max(x)
+        y_min, y_max = min(y), max(y)
+        # 挑选出目标矩形区域可能会有越界情况，越界时直接将其置为边界：
+        # 超出左边界取0，超出右边界取w_s-1，超出下边界取0，超出上边界取h_s-1
+        # 当x_min小于0时，取0。  x_max小于0时，取0。
+        x_min, x_max = int(max(x_min, 0)), int(max(x_max, 0))
+        # 当x_min大于w_s时，取值w_s-1。  x_max大于w_s-1时，取w_s-1。
+        x_min, x_max = int(min(x_min, w - 1)), int(min(x_max, w - 1))
+        # 当y_min小于0时，取0。  y_max小于0时，取0。
+        y_min, y_max = int(max(y_min, 0)), int(max(y_max, 0))
+        # 当y_min大于h_s时，取值h_s-1。  y_max大于h_s-1时，取h_s-1。
+        y_min, y_max = int(min(y_min, h - 1)), int(min(y_max, h - 1))
+        rect = Rect(x=x_min, y=y_min, width=(x_max - x_min), height=(y_max - y_min))
+        return rect
