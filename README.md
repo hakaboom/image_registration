@@ -17,3 +17,8 @@ Image registration algorithm. Includes SIFT, ORB, SURF, AKAZE, BRIEF, matchTempl
 
 ## Installation
 pip3 install py-image-registration
+
+
+## Contribution
+
+Pull requests are very welcome. 
