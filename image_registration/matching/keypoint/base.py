@@ -301,8 +301,11 @@ class BaseKeypoint(object):
         len_good = len(good)
         confidence, rect, target_img = None, None, None
 
-        if len_good in [0, 1]:
+        if len_good == 0:
             pass
+        elif len_good == 1:
+            target_img, rect = self._handle_one_good_points(im_source=im_source, im_search=im_search,
+                                                            kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
         elif len_good == 2:
             target_img, rect = self._handle_two_good_points(im_source=im_source, im_search=im_search,
                                                             kp_sch=kp_sch, kp_src=kp_src, good=good, angle=angle)
@@ -317,6 +320,34 @@ class BaseKeypoint(object):
             confidence = self._cal_confidence(im_source=im_search, im_search=target_img, rgb=rgb)
 
         return rect, confidence
+
+    def _handle_one_good_points(self, im_source, im_search, kp_src, kp_sch, good, angle):
+        """
+        特征点匹配数量等于1时,根据特征点的大小,对矩形进行缩放,并根据旋转角度,获取识别的目标图片
+
+        Args:
+            im_source: 待匹配图像
+            im_search: 图片模板
+            kp_sch: 关键点集
+            kp_src: 关键点集
+            good: 描述符集
+            angle: 旋转角度
+
+        Returns:
+            待验证的图片
+        """
+        sch_point = get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')[0]
+        src_point = get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')[0]
+
+        scale = src_point.size / sch_point.size
+        h, w = im_search.size
+        _h, _w = h * scale, w * scale
+        src = np.float32(rectangle_transform(point=sch_point.pt, size=(h, w), mapping_point=src_point.pt,
+                                             mapping_size=(_h, _w), angle=angle))
+        dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+        output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
+        rect = self._get_perspective_area_rect(im_source=im_source, src=src)
+        return output, rect
 
     def _handle_two_good_points(self, im_source, im_search, kp_src, kp_sch, good, angle):
         """
@@ -333,17 +364,23 @@ class BaseKeypoint(object):
         Returns:
             待验证的图片
         """
-        sch_point = [i.pt for i in get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')]
-        src_point = [i.pt for i in get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')]
+        sch_point = get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')
+        src_point = get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')
 
         sch_distance = keypoint_distance(sch_point[0], sch_point[1])
         src_distance = keypoint_distance(src_point[0], src_point[1])
 
-        scale = src_distance / sch_distance  # 计算缩放大小
+        try:
+            scale = src_distance / sch_distance  # 计算缩放大小
+        except ZeroDivisionError:
+            if src_distance == sch_distance:
+                scale = 1
+            else:
+                return None, None
 
         h, w = im_search.size
         _h, _w = h * scale, w * scale
-        src = np.float32(rectangle_transform(point=sch_point[0], size=(h, w), mapping_point=src_point[0],
+        src = np.float32(rectangle_transform(point=sch_point[0].pt, size=(h, w), mapping_point=src_point[0].pt,
                                              mapping_size=(_h, _w), angle=angle))
         dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
         output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
@@ -379,7 +416,14 @@ class BaseKeypoint(object):
 
         sch_area = _area(sch_point)
         src_area = _area(src_point)
-        scale = src_area / sch_area  # 计算缩放大小
+
+        try:
+            scale = src_area / sch_area  # 计算缩放大小
+        except ZeroDivisionError:
+            if sch_area == src_area:
+                scale = 1
+            else:
+                return None, None
 
         h, w = im_search.size
         _h, _w = h * scale, w * scale
@@ -524,7 +568,8 @@ class BaseKeypoint(object):
         h, w = im_search.size
         matrix = cv2.getPerspectiveTransform(src=src, dst=dst)
         # warpPerspective https://github.com/opencv/opencv/issues/11784
-        output = im_source.warpPerspective(matrix, size=(w, h), flags=cv2.INTER_NEAREST)
+        output = im_source.warpPerspective(matrix, size=(w, h), flags=cv2.INTER_CUBIC)
+
         return output
 
     @staticmethod
