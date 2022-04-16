@@ -140,7 +140,7 @@ class BaseKeypoint(object):
 
         return result
 
-    def get_keypoint_and_descriptor(self, image: Image):
+    def get_keypoint_and_descriptor(self, image):
         """
         获取图像关键点(keypoint)与描述符(descriptor)
 
@@ -333,8 +333,8 @@ class BaseKeypoint(object):
         Returns:
             待验证的图片
         """
-        sch_point = get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')
-        src_point = get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')
+        sch_point = [i.pt for i in get_keypoint_from_matches(kp=kp_sch, matches=good, mode='query')]
+        src_point = [i.pt for i in get_keypoint_from_matches(kp=kp_src, matches=good, mode='train')]
 
         sch_distance = keypoint_distance(sch_point[0], sch_point[1])
         src_distance = keypoint_distance(src_point[0], src_point[1])
@@ -343,7 +343,7 @@ class BaseKeypoint(object):
 
         h, w = im_search.size
         _h, _w = h * scale, w * scale
-        src = np.float32(rectangle_transform(point=sch_point[0].pt, size=(h, w), mapping_point=src_point[0].pt,
+        src = np.float32(rectangle_transform(point=sch_point[0], size=(h, w), mapping_point=src_point[0],
                                              mapping_size=(_h, _w), angle=angle))
         dst = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
         output = self._perspective_transform(im_source=im_source, im_search=im_search, src=src, dst=dst)
@@ -451,14 +451,13 @@ class BaseKeypoint(object):
             raise MatchResultError(f"Target area({rect}) out of screen{img.size}")
         return target_img
 
-    def _cal_confidence(self, im_source, im_search, rgb: bool) -> Union[int, float]:
+    def _cal_confidence(self, im_source, im_search, rgb):
         """
         将截图和识别结果缩放到大小一致,并计算可信度
 
         Args:
             im_source: 待匹配图像
             im_search: 图片模板
-            crop_rect: 需要在im_source截取的区域
             rgb:是否使用rgb通道进行校验
 
         Returns:
