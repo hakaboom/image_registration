@@ -2,11 +2,9 @@
 # -*- coding:utf-8 -*-
 import cv2
 import numpy as np
-from typing import Union, Optional, Type, Any, Tuple, List
-from baseImage.constant import Place
-from baseImage import Image, Rect
+from typing import Union, Tuple, List
+from baseImage import Image
 
-from image_registration.matching import MatchTemplate, CudaMatchTemplae
 from image_registration.matching.keypoint.base import BaseKeypoint
 
 
@@ -26,4 +24,3 @@ class ORB(BaseKeypoint):
 
     @staticmethod
     def create_descriptor() -> cv2.xfeatures2d.BEBLID: ...
-

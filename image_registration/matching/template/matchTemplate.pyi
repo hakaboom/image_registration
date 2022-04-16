@@ -45,7 +45,7 @@ class MatchTemplate(object):
     def _get_confidence_from_matrix(self, img_crop: Image, im_search: Image, max_val: float, rgb: bool) -> float: ...
 
 
-class CudaMatchTemplae(MatchTemplate):
+class CudaMatchTemplate(MatchTemplate):
     METHOD_NAME: str = 'tpl'
     Dtype: Type[np.uint8] = np.uint8
     Place: tuple = Place.GpuMat

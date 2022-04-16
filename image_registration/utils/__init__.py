@@ -15,7 +15,7 @@ def generate_result(rect, confi):
     return ret
 
 
-def keypoint_distance(kp1: Union[cv2.KeyPoint, list, tuple], kp2: Union[cv2.KeyPoint, list, tuple]):
+def keypoint_distance(kp1, kp2):
     """求两个keypoint的两点之间距离"""
     if isinstance(kp1, cv2.KeyPoint):
         kp1 = kp1.pt
@@ -36,7 +36,7 @@ def keypoint_distance(kp1: Union[cv2.KeyPoint, list, tuple], kp2: Union[cv2.KeyP
     return math.sqrt((x ** 2) + (y ** 2))
 
 
-def keypoint_angle(kp1: cv2.KeyPoint, kp2: cv2.KeyPoint):
+def keypoint_angle(kp1, kp2):
     """求两个keypoint的夹角 """
     k = [
         (kp1.angle - 180) if kp1.angle >= 180 else kp1.angle,
@@ -56,10 +56,11 @@ def get_keypoint_from_matches(kp, matches, mode):
     elif mode == 'train':
         for match in matches:
             res.append(kp[match.trainIdx])
+
     return res
 
 
-def keypoint_origin_angle(kp1: cv2.KeyPoint, kp2: cv2.KeyPoint):
+def keypoint_origin_angle(kp1, kp2):
     """
     以kp1为原点,计算kp2的旋转角度
     """
@@ -95,7 +96,7 @@ def _mapping_angle_distance(distance, origin_angle, angle):
     """
 
     Args:
-        d: 距离
+        distance: 距离
         origin_angle: 对应原点的角度
         angle: 旋转角度
 

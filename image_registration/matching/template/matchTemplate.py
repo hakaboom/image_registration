@@ -17,7 +17,7 @@ class MatchTemplate(object):
     Dtype = np.uint8
     Place = (Place.Mat, Place.Ndarray)
 
-    def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True):
+    def __init__(self, threshold=0.8, rgb=True):
         """
         初始化
 
@@ -67,7 +67,7 @@ class MatchTemplate(object):
         rect = Rect(x=x, y=y, width=w, height=h)
         return generate_result(rect, confidence)
 
-    def find_all_results(self, im_source: Image, im_search: Image, threshold=None, rgb=None, max_count=10):
+    def find_all_results(self, im_source, im_search, threshold=None, rgb=None, max_count=10):
         """
         模板匹配, 返回匹配度大于阈值的范围, 且最大数量不超过max_count
 
@@ -106,7 +106,7 @@ class MatchTemplate(object):
 
         return results if results else None
 
-    def _get_template_result_matrix(self, im_source: Image, im_search: Image) -> Image:
+    def _get_template_result_matrix(self, im_source, im_search):
         """求取模板匹配的结果矩阵."""
         if im_source.channels == 3:
             i_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
@@ -135,7 +135,7 @@ class MatchTemplate(object):
 
         return im_source, im_search
 
-    def _image_check(self, data: Union[str, bytes, np.ndarray, cv2.cuda.GpuMat, cv2.Mat, cv2.UMat, Image]):
+    def _image_check(self, data):
         if not isinstance(data, Image):
             data = Image(data, dtype=self.Dtype)
 
@@ -144,13 +144,13 @@ class MatchTemplate(object):
         return data
 
     @staticmethod
-    def minMaxLoc(result: np.ndarray):
+    def minMaxLoc(result):
         return cv2.minMaxLoc(result)
 
     def match(self, img1, img2):
         return self.matcher(img1, img2, cv2.TM_CCOEFF_NORMED)
 
-    def cal_confidence(self, im_source: Image, im_search: Image, crop_rect: Rect, max_val: int, rgb: bool) -> float:
+    def cal_confidence(self, im_source, im_search, crop_rect, max_val, rgb):
         """
         将截图和识别结果缩放到大小一致,并计算可信度
 
@@ -171,7 +171,7 @@ class MatchTemplate(object):
         confidence = self._get_confidence_from_matrix(target_img, im_search, max_val, rgb)
         return confidence
 
-    def cal_rgb_confidence(self, im_source: Image, im_search: Image) -> float:
+    def cal_rgb_confidence(self, im_source, im_search):
         """
         计算两张图片图片rgb三通道的置信度
 
@@ -199,7 +199,7 @@ class MatchTemplate(object):
 
         return min(bgr_confidence)
 
-    def cal_ccoeff_confidence(self, im_source: Image, im_search: Image):
+    def cal_ccoeff_confidence(self, im_source, im_search):
         if im_source.channels == 3:
             img_src_gray = im_source.cvtColor(cv2.COLOR_BGR2GRAY).data
         else:
@@ -225,20 +225,20 @@ class MatchTemplate(object):
         return confidence
 
 
-class CudaMatchTemplae(MatchTemplate):
+class CudaMatchTemplate(MatchTemplate):
     METHOD_NAME = 'tpl'
     Dtype = np.uint8
     Place = (Place.GpuMat, )
 
-    def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True):
-        super(CudaMatchTemplae, self).__init__(threshold=threshold, rgb=rgb)
+    def __init__(self, threshold=0.8, rgb=True):
+        super(CudaMatchTemplate, self).__init__(threshold=threshold, rgb=rgb)
         try:
             self.matcher = cv2.cuda.createTemplateMatching(cv2.CV_8U, cv2.TM_CCOEFF_NORMED)
         except AttributeError:
             raise NoModuleError('create CUDA TemplateMatching Error')
 
     @staticmethod
-    def minMaxLoc(result: cv2.cuda.GpuMat):
+    def minMaxLoc(result):
         return cv2.cuda.minMaxLoc(result)
 
     def match(self, img1, img2):

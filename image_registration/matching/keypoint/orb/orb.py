@@ -54,13 +54,18 @@ class ORB(BaseKeypoint):
         descriptor = cv2.xfeatures2d.BEBLID_create(0.75)
         return descriptor
 
-    def get_keypoints_and_descriptors(self, image: np.ndarray):
+    def get_keypoint_and_descriptor(self, image):
         """
         获取图像关键点(keypoints)与描述符(descriptors)
         :param image: 待检测的灰度图像
         :raise NoEnoughPointsError: 检测特征点数量少于2时,弹出异常
         :return: 关键点(keypoints)与描述符(descriptors)
         """
+        if image.channels == 3:
+            image = image.cvtColor(cv2.COLOR_BGR2GRAY).data
+        else:
+            image = image.data
+
         keypoints = self.detector.detect(image, None)
         keypoints, descriptors = self.descriptor.compute(image, keypoints)
 
