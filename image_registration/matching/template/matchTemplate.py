@@ -226,7 +226,7 @@ class MatchTemplate(object):
 
 
 class CudaMatchTemplate(MatchTemplate):
-    METHOD_NAME = 'tpl'
+    METHOD_NAME = 'cuda_tpl'
     Dtype = np.uint8
     Place = (Place.GpuMat, )
 

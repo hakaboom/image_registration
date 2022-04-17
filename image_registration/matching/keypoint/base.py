@@ -124,6 +124,7 @@ class BaseKeypoint(object):
             try:
                 rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
                                                             kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
+                # print(f'good:{len(filtered_good_point)}, rect={rect}, confidence={confidence}')
             except PerspectiveTransformError:
                 pass
             finally:
