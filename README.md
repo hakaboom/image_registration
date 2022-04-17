@@ -202,6 +202,9 @@ result = match.find_all_results(im_source, im_search)
 - cuda版本11.3
 - opencv版本:4.5.5-dev(从源码编译)
 
+**测试内容**: 循环50次,获取目标图片和模板图片的特征点,并匹配.<br />
+**注：没有进行特征点的筛选, 特征点方法没有进行模板匹配计算置信度,因此实际速度会比测试的速度要慢**
+
 从图中可以看出cuda方法的速度最快,同时cpu的占用也小,原因是这部分算力给到了cuda<br />
 因为没有用代码获取cuda使用率,这边在任务管理器看的,只能说个大概数<br />
 - cuda_orb: cuda占用在35%~40%左右
@@ -228,17 +231,17 @@ Image('tests/images/1.png', place=Place.GpuMat)
 Image('tests/images/1.png', place=Place.UMat) 
 ```
 
-可以用cuda加速的识别方法
+可以用cuda加速的识别方法, 需要调用其他的类函数,且图片格式需要是```cv2.cuda.GpuMat```
+- surf
+- orb: 对应函数```image_registration.matching.keypoint.orb.CUDA_ORB```
+- matchTemplate```image_registration.matching.template.matchTemplate.CudaMatchTemplate```
+
+可以用opencl加速的识别方法, 只需要传图像参数的时候,格式是```UMat```,opencv会自动的调用```opencl```方法
 - surf
 - orb
 - matchTemplate
 
-可以用opencl加速的识别方法
-- surf
-- orb
-- matchTemplate
-
-这边只讲了识别的方法,在其他的图像处理函数也能有一定的加速,但是不如以上方法明显
+这边只讲了特征点获取/模板匹配的方法,在其他的图像处理函数中```cuda```和```opencl```也能有一定的加速,但是不如以上方法明显
 
 2. 从框架设计上进行加速.<br />
 - 从游戏上讲,我们预先知道一些控件,在屏幕中的坐标位置.分辨率进行转换时,我们可以通过计算控件的位置,裁剪对应位置的图像,通过模板匹配进行快速的识别.
