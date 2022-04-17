@@ -24,3 +24,12 @@ class ORB(BaseKeypoint):
 
     @staticmethod
     def create_descriptor() -> cv2.xfeatures2d.BEBLID: ...
+
+
+class CUDA_ORB(BaseKeypoint):
+    def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True,
+                 nfeatures: int = 50000 ,scaleFactor: Union[int, float] = 1.2, nlevels: int = 8,
+                 edgeThreshold: int = 31, firstLevel: int = 0, WTA_K: int = 2,
+                 scoreType: int = cv2.ORB_HARRIS_SCORE, patchSize: int = 31, fastThreshold: int = 20,
+                 blurForDescriptor: bool = False): ...
+

@@ -1,1 +1,1 @@
-from .orb import ORB
+from .orb import ORB, CUDA_ORB

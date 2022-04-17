@@ -4,8 +4,9 @@ import cv2
 import numpy as np
 from baseImage.constant import Place
 
+from image_registration.matching.template import CudaMatchTemplate
 from image_registration.matching.keypoint.base import BaseKeypoint
-from image_registration.exceptions import NoEnoughPointsError
+from image_registration.exceptions import NoEnoughPointsError, CudaOrbDetectorError
 from typing import Union
 
 
@@ -55,12 +56,6 @@ class ORB(BaseKeypoint):
         return descriptor
 
     def get_keypoint_and_descriptor(self, image):
-        """
-        获取图像关键点(keypoints)与描述符(descriptors)
-        :param image: 待检测的灰度图像
-        :raise NoEnoughPointsError: 检测特征点数量少于2时,弹出异常
-        :return: 关键点(keypoints)与描述符(descriptors)
-        """
         if image.channels == 3:
             image = image.cvtColor(cv2.COLOR_BGR2GRAY).data
         else:
@@ -68,6 +63,66 @@ class ORB(BaseKeypoint):
 
         keypoints = self.detector.detect(image, None)
         keypoints, descriptors = self.descriptor.compute(image, keypoints)
+
+        if len(keypoints) < 2:
+            raise NoEnoughPointsError('{} detect not enough feature points in input images'.format(self.METHOD_NAME))
+        return keypoints, descriptors
+
+
+class CUDA_ORB(BaseKeypoint):
+    METHOD_NAME = 'CUDA_ORB'
+    Dtype = np.uint8
+    Place = (Place.GpuMat,)
+
+    def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True, **kwargs):
+        super().__init__(threshold=threshold, rgb=rgb, **kwargs)
+        self.template = CudaMatchTemplate(threshold=threshold, rgb=rgb)
+
+    def create_matcher(self, **kwargs):
+        """
+        创建特征点匹配器
+
+        Returns:
+            cv2.FlannBasedMatcher
+        """
+        matcher = cv2.cuda.DescriptorMatcher_createBFMatcher(cv2.NORM_HAMMING)
+        return matcher
+
+    def create_detector(self, **kwargs):
+        nfeatures = kwargs.get('nfeatures', 50000)
+        scaleFactor = kwargs.get('scaleFactor', 1.2)
+        nlevels = kwargs.get('nlevels', 8)
+        edgeThreshold = kwargs.get('edgeThreshold', 31)
+        firstLevel = kwargs.get('firstLevel', 0)
+        WTA_K = kwargs.get('WTA_K', 2)
+        scoreType = kwargs.get('scoreType', cv2.ORB_HARRIS_SCORE)
+        patchSize = kwargs.get('patchSize', 31)
+        fastThreshold = kwargs.get('fastThreshold', 20)
+        blurForDescriptor = kwargs.get('blurForDescriptor', False)
+
+        params = dict(
+            nfeatures=nfeatures, scaleFactor=scaleFactor, nlevels=nlevels,
+            edgeThreshold=edgeThreshold, firstLevel=firstLevel, WTA_K=WTA_K,
+            scoreType=scoreType, patchSize=patchSize, fastThreshold=fastThreshold,
+            blurForDescriptor=blurForDescriptor
+        )
+
+        detector = cv2.cuda.ORB_create(**params)
+        return detector
+
+    def get_keypoint_and_descriptor(self, image):
+        if image.channels == 3:
+            image = image.cvtColor(cv2.COLOR_BGR2GRAY).data
+        else:
+            image = image.data
+
+        try:
+            keypoints, descriptors = self.detector.detectAndComputeAsync(image, None)
+        except cv2.error:
+            # https://github.com/opencv/opencv/issues/10573
+            raise CudaOrbDetectorError('{} detect error, Try adjust detector params'.format(self.METHOD_NAME))
+        else:
+            keypoints = self.detector.convert(keypoints)
 
         if len(keypoints) < 2:
             raise NoEnoughPointsError('{} detect not enough feature points in input images'.format(self.METHOD_NAME))
