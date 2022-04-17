@@ -208,7 +208,7 @@ result = match.find_all_results(im_source, im_search)
 - cuda_tpl: cuda占用在15%~20%左右
 - opencl_surf: cuda占用在13%左右
 - opencl_akaze: cuda占用在10%~15%左右
-- 
+
 还有其他的算法,opencv没有提供cuda或者是opencl的实现,只能用cpu加速
 
 ![img.png](benchmark/result/Figure_1.png)
