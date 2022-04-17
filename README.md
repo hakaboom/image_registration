@@ -44,6 +44,15 @@ UI自动化的核心在于查找元素,并且在什么位置.那么重点就会�
 一开始是参考了airtest的aircv部分,当时不想有那么多依赖,就拆出来了.
 重构之后,通过对opencv一些api的封装,重新组织了构架和算法.目前效果感觉不错,也已经给airtest提了pr,后续也会推进合并.
 
+## 安装opencv-python
+建议版本可以是4.5.5
+1. pypi上有编译好的,但是只能用cpu方法: 
+   - `pip install opencv-python`
+   - `pip install opencv-contrib-python`
+2. 从源码编译,可以自定义更多的东西,比如增加cuda支持
+   - 先从opencv仓库克隆代码
+   - 剩下的看这里 https://github.com/hakaboom/py_image_registration/blob/master/doc/cuda_opencv.md
+
 ## 什么是特征点
 简单的理解: 用于描述图像特征的关键点
 
@@ -215,7 +224,7 @@ def create_detector(self, **kwargs) -> cv2.SIFT:
 匹配完成后,如果识别成功,则删除目标区域的特征点,然后进入下一次循环
 
 
-## 基准测试
+# 4）基准测试
 设备环境:
 - i7-9700k 3.6GHz
 - NvidiaRTX 3080Ti
@@ -238,7 +247,7 @@ def create_detector(self, **kwargs) -> cv2.SIFT:
 ![img.png](benchmark/result/result.png)
 
 
-## 怎么优化速度
+# 5）怎么优化速度
 1. airtest慢的一个原因在于,只用了cpu计算.如果能释放算力到gpu上,速度就会有成倍的增长.<br />
 opencv已经给我们做好了很多接口.我们可以通过```cv2.cuda.GpuMat```, ```cv2.UMat```调用cuda和opencl的算法.<br />
 通过```baseImage```可以快速的创建对应格式的图像
