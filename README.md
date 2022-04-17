@@ -127,7 +127,7 @@ result = match.find_all_results(im_source, im_search)
 
 4. 解析下```find_all_results```里做了什么
 可以在```image_registration.matching.keypoint.base```里找到基类
-    - 第一步: 创建特征点提取器```BaseKeypoint.create_matcher```<br />
+    - 第一步: 创建特征点提取器```BaseKeypoint.create_matcher```
     例：```image_registration.matching.keypoint.sift```
     ```python
     def create_detector(self, **kwargs) -> cv2.SIFT:
@@ -141,16 +141,16 @@ result = match.find_all_results(im_source, im_search)
                                    edgeThreshold=edgeThreshold, sigma=sigma)
         return detector
     ```
-    - 第二步: 特征点匹配器```BaseKeypoint.create_detector```用于匹配模板和目标图片的特征点<br />
+    - 第二步: 特征点匹配器```BaseKeypoint.create_detector```用于匹配模板和目标图片的特征点
     有两种匹配器,
       - ```BFMatcher```: 暴力匹配, 总是尝试所有可能的匹配
       - ```FlannBasedMatcher```: 算法更快,但是也能找到最近邻的匹配
     
-    - 第三步: 提取特征点```BaseKeypoint.get_keypoint_and_descriptor```<br />
+    - 第三步: 提取特征点```BaseKeypoint.get_keypoint_and_descriptor```
     用第一步创建的提取器去获取特征点.ORB这种,还需要额外的去增加描述器.具体就看代码实现吧.
     - 第四步: 匹配特征点
     用第二步创建的匹配器,获取特征点集
-    - 第五步: 筛选特征点```BaseKeypoint.filter_good_point```<br />
+    - 第五步: 筛选特征点```BaseKeypoint.filter_good_point```
       - ```cv2.DMatch``` opencv的匹配关键点描述符类
         - ```distance```: 两个描述符之间的距离(欧氏距离等),越小表明匹配度越高
         - ```imgIdx```: 训练图像索引
@@ -163,8 +163,7 @@ result = match.find_all_results(im_source, im_search)
         - ```pt```: 特征点的坐标(x,y)
         - ```response```: 特征点的响应强度
         - ```size```: 特征点的直径大小
-      
-      知道了这两种类之后,我们就可以通过第四步获取的特征点集进行筛选<br />
+      知道了这两种类之后,我们就可以通过第四步获取的特征点集进行筛选
         - 步骤1: 根据queryIdx的索引对列表进行重组,主要目的是,让一个模板的特征点只可以对应一个目标的特征点
         - 步骤2: 根据distance的升序,对特征点集进行排序,提取出第一个点,也就是当前点集中,```distance```数值最小的点,为```待匹配点A```
         - 步骤3. 获取点```待匹配点A```对应的```queryIdx```和```trainIdx```的keypoint(```query_keypoint```,```train_keypoint```,通过两个特征点的```angle```可以计算出,特征点的旋转方向
@@ -173,7 +172,7 @@ result = match.find_all_results(im_source, im_search)
         - 步骤5. 计算以```query_keypoint```为原点,其他特征点的旋转角,还是根据旋转不变性,我们可以再去筛选以```train_keypoint```原点,其他特征的的旋转角
         - 最后,我们就可以获取到,所有匹配的点、图片旋转角度、基准点(```待匹配点A```)
 
-5. 筛选完点集后,就可以进行匹配了,这边会有几种情况```BaseKeypoint.extract_good_points```<br />
+5. 筛选完点集后,就可以进行匹配了,这边会有几种情况```BaseKeypoint.extract_good_points```
     - 没有特征点,其实肯定会有一个特征点
     - 有1组特征点```BaseKeypoint._handle_one_good_points```
       - 根据两个特征点的```size```大小,获取尺度的变换
