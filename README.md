@@ -195,6 +195,27 @@ result = match.find_all_results(im_source, im_search)
 匹配完成后,如果识别成功,则删除目标区域的特征点,然后进入下一次循环
 
 
+## 基准测试
+设备环境:
+- i7-9700k 3.6GHz
+- NvidiaRTX 3080Ti
+- cuda版本11.3
+- opencv版本:4.5.5-dev(从源码编译)
+
+从图中可以看出cuda方法的速度最快,同时cpu的占用也小,原因是这部分算力给到了cuda<br />
+因为没有用代码获取cuda使用率,这边在任务管理器看的,只能说个大概数<br />
+- cuda_orb: cuda占用在35%~40%左右
+- cuda_tpl: cuda占用在15%~20%左右
+- opencl_surf: cuda占用在13%左右
+- opencl_akaze: cuda占用在10%~15%左右
+- 
+还有其他的算法,opencv没有提供cuda或者是opencl的实现,只能用cpu加速
+
+![img.png](benchmark/result/Figure_1.png)
+![img.png](benchmark/result/result.png)
+
+
+
 ## 怎么优化速度
 1. airtest慢的一个原因在于,只用了cpu计算.如果能释放算力到gpu上,速度就会有成倍的增长.<br />
 opencv已经给我们做好了很多接口.我们可以通过```cv2.cuda.GpuMat```, ```cv2.UMat```调用cuda和opencl的算法.<br />
