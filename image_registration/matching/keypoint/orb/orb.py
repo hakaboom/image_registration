@@ -19,7 +19,7 @@ class ORB(BaseKeypoint):
         super().__init__(threshold=threshold, rgb=rgb, **kwargs)
         self.descriptor = self.create_descriptor()
 
-    def create_matcher(self):
+    def create_matcher(self, **kwargs):
         """
         创建特征点匹配器
 
