@@ -9,7 +9,8 @@ from baseImage import Image, Rect, Point
 from image_registration.matching import MatchTemplate
 from image_registration.utils import (generate_result, get_keypoint_from_matches, keypoint_origin_angle, keypoint_distance,
                                       rectangle_transform)
-from image_registration.exceptions import NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError
+from image_registration.exceptions import (NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError,
+                                           InputImageError)
 from typing import Union, List
 
 
@@ -124,7 +125,7 @@ class BaseKeypoint(object):
             try:
                 rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
                                                             kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
-                # print(f'good:{len(filtered_good_point)}, rect={rect}, confidence={confidence}')
+                print(f'good:{len(filtered_good_point)}, rect={rect}, confidence={confidence}')
             except PerspectiveTransformError:
                 pass
             finally:
@@ -522,9 +523,13 @@ class BaseKeypoint(object):
         im_source = self._image_check(im_source)
         im_search = self._image_check(im_search)
 
-        assert im_source.place == im_search.place, '输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place)
-        assert im_source.dtype == im_search.dtype, '输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype)
-        assert im_source.channels == im_search.channels, '输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels)
+        if im_source.place != im_search.place:
+            raise InputImageError('输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place))
+        elif im_source.dtype != im_search.dtype:
+            raise InputImageError('输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype))
+        elif im_source.channels != im_search.channels:
+            raise InputImageError('输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels))
+
         return im_source, im_search
 
     def _image_check(self, data):

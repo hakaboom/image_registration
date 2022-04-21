@@ -7,7 +7,7 @@ import numpy as np
 from baseImage import Image, Rect
 from baseImage.constant import Place
 
-from image_registration.exceptions import MatchResultError, NoModuleError
+from image_registration.exceptions import MatchResultError, NoModuleError, InputImageError
 from image_registration.utils import generate_result
 from typing import Union
 
@@ -123,9 +123,12 @@ class MatchTemplate(object):
         im_source = self._image_check(im_source)
         im_search = self._image_check(im_search)
 
-        assert im_source.place == im_search.place, '输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place)
-        assert im_source.dtype == im_search.dtype, '输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype)
-        assert im_source.channels == im_search.channels, '输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels)
+        if im_source.place != im_search.place:
+            raise InputImageError('输入图片类型必须相同, source={}, search={}'.format(im_source.place, im_search.place))
+        elif im_source.dtype != im_search.dtype:
+            raise InputImageError('输入图片数据类型必须相同, source={}, search={}'.format(im_source.dtype, im_search.dtype))
+        elif im_source.channels != im_search.channels:
+            raise InputImageError('输入图片通道必须相同, source={}, search={}'.format(im_source.channels, im_search.channels))
 
         if im_source.place == Place.UMat:
             warnings.warn('Umat has error,will clone new image with np.ndarray '

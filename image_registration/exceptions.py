@@ -40,3 +40,7 @@ class MatchResultError(BaseError):
 
 class PerspectiveTransformError(BaseError):
     """ An error occurred while perspectiveTransform """
+
+
+class InputImageError(BaseError):
+    """ An error occurred while input image place/dtype/channels error"""
