@@ -11,7 +11,7 @@ class SIFT(BaseKeypoint):
     FLANN_INDEX_KDTREE = 0
     METHOD_NAME = 'SIFT'
     Dtype = np.uint8
-    Place = (Place.Mat, Place.UMat, Place.Ndarray)
+    Place = (Place.UMat, Place.Ndarray)
 
     def create_matcher(self, **kwargs) -> cv2.DescriptorMatcher:
         """

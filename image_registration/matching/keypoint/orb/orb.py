@@ -13,7 +13,7 @@ from typing import Union
 class ORB(BaseKeypoint):
     METHOD_NAME = 'ORB'
     Dtype = np.uint8
-    Place = (Place.Mat, Place.UMat, Place.Ndarray)
+    Place = (Place.UMat, Place.Ndarray)
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True, **kwargs):
         super().__init__(threshold=threshold, rgb=rgb, **kwargs)

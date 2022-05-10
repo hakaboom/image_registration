@@ -537,7 +537,7 @@ class BaseKeypoint(object):
             data = Image(data, dtype=self.Dtype)
 
         if data.place not in self.Place:
-            raise TypeError(f'{self.METHOD_NAME}方法,Image类型必须为(Place.Mat, Place.UMat, Place.Ndarray)')
+            raise TypeError(f'{self.METHOD_NAME}方法,Image类型必须为(Place.UMat, Place.Ndarray)')
         return data
 
     @staticmethod

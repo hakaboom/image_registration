@@ -15,7 +15,7 @@ from typing import Union
 class MatchTemplate(object):
     METHOD_NAME = 'tpl'
     Dtype = np.uint8
-    Place = (Place.Mat, Place.Ndarray)
+    Place = (Place.Ndarray, )
 
     def __init__(self, threshold=0.8, rgb=True):
         """
@@ -133,8 +133,8 @@ class MatchTemplate(object):
         if im_source.place == Place.UMat:
             warnings.warn('Umat has error,will clone new image with np.ndarray '
                           '(https://github.com/opencv/opencv/issues/21788)')
-            im_source = Image(im_source, place=Place.Mat, dtype=im_source.dtype)
-            im_search = Image(im_search, place=Place.Mat, dtype=im_search.dtype)
+            im_source = Image(im_source, place=Place.Ndarray, dtype=im_source.dtype)
+            im_search = Image(im_search, place=Place.Ndarray, dtype=im_search.dtype)
 
         return im_source, im_search
 
@@ -143,7 +143,7 @@ class MatchTemplate(object):
             data = Image(data, dtype=self.Dtype)
 
         if data.place not in self.Place:
-            raise TypeError('Image类型必须为(Place.Mat, Place.UMat, Place.Ndarray)')
+            raise TypeError('Image类型必须为(Place.UMat, Place.Ndarray)')
         return data
 
     @staticmethod

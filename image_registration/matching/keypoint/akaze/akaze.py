@@ -10,7 +10,7 @@ from image_registration.matching.keypoint.base import BaseKeypoint
 class AKAZE(BaseKeypoint):
     METHOD_NAME = 'AKAZE'
     Dtype = np.uint8
-    Place = (Place.Mat, Place.UMat, Place.Ndarray)
+    Place = (Place.UMat, Place.Ndarray)
 
     def create_matcher(self, **kwargs) -> cv2.DescriptorMatcher:
         """

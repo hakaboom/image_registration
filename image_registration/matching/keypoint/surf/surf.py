@@ -11,7 +11,7 @@ class SURF(BaseKeypoint):
     FLANN_INDEX_KDTREE = 0
     METHOD_NAME = "SURF"
     Dtype = np.uint8
-    Place = (Place.Mat, Place.UMat, Place.Ndarray)
+    Place = (Place.UMat, Place.Ndarray)
 
     def create_matcher(self, **kwargs) -> cv2.DescriptorMatcher:
         """

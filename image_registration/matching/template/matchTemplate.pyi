@@ -14,7 +14,7 @@ from typing import Union, Any, Tuple, Type
 class MatchTemplate(object):
     METHOD_NAME: str = 'tpl'
     Dtype: Type[np.uint8] = np.uint8
-    Place: tuple = (Place.Mat, Place.Ndarray)
+    Place: tuple = (Place.Ndarray, )
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True):
         self.threshold: Union[int, float] = threshold
