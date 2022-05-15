@@ -2,16 +2,13 @@
 # -*- coding:utf-8 -*-
 import cv2
 import numpy as np
-import time
-import math
-from baseImage import Image, Rect, Point
+from baseImage import Image, Rect
 
 from image_registration.matching import MatchTemplate
-from image_registration.utils import (generate_result, get_keypoint_from_matches, keypoint_origin_angle, keypoint_distance,
-                                      rectangle_transform)
+from image_registration.utils import (generate_result, get_keypoint_from_matches, keypoint_distance, rectangle_transform)
 from image_registration.exceptions import (NoEnoughPointsError, PerspectiveTransformError, HomographyError, MatchResultError,
                                            InputImageError)
-from typing import Union, List
+from typing import List
 
 
 class BaseKeypoint(object):
@@ -40,7 +37,7 @@ class BaseKeypoint(object):
     def create_detector(self, **kwargs):
         raise NotImplementedError
 
-    def find_best_result(self, im_source, im_search, threshold=None, rgb=None):
+    def find_best_result(self, im_source, im_search, threshold=None, rgb=None, **kwargs):
         """
         通过特征点匹配,在im_source中找到最符合im_search的范围
 
@@ -53,25 +50,12 @@ class BaseKeypoint(object):
         Returns:
 
         """
-        threshold = threshold or self.threshold
-        rgb = rgb or self.rgb
-
-        im_source, im_search = self.input_image_check(im_source, im_search)
-        if im_source.channels == 1:
-            rgb = False
-        kp_src, des_src = self.get_keypoint_and_descriptor(image=im_source)
-        kp_sch, des_sch = self.get_keypoint_and_descriptor(image=im_search)
-
-        # 在特征点集中,匹配最接近的特征点
-        matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
-        good = self.get_good_in_matches(matches=matches)
-        filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-        rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src, kp_sch=kp_sch,
-                                                    good=filtered_good_point, angle=angle, rgb=rgb)
-
-        if not rect or confidence < threshold:
-            return None
-        return generate_result(rect, confidence)
+        max_count = 1
+        ret = self.find_all_results(im_source=im_source, im_search=im_search, threshold=threshold, rgb=rgb,
+                                    max_count=max_count, **kwargs)
+        if ret:
+            return ret[0]
+        return None
 
     def find_all_results(self, im_source, im_search, threshold=None, rgb=None, max_count=10, max_iter_counts=20, distance_threshold=150):
         """
@@ -96,28 +80,27 @@ class BaseKeypoint(object):
         result = []
         if im_source.channels == 1:
             rgb = False
+
         kp_src, des_src = self.get_keypoint_and_descriptor(image=im_source)
         kp_sch, des_sch = self.get_keypoint_and_descriptor(image=im_search)
 
+        kp_src, kp_sch = list(kp_src), list(kp_sch)
         # 在特征点集中,匹配最接近的特征点
-        matches = self.match_keypoint(des_sch=des_sch, des_src=des_src)
-        good = self.get_good_in_matches(matches=matches)
+        matches = np.array(self.match_keypoint(des_sch=des_sch, des_src=des_src))
+        kp_sch_point = np.array([(kp.pt[0], kp.pt[1], kp.angle) for kp in kp_sch])
+        kp_src_matches_point = np.array([[(*kp_src[dMatch.trainIdx].pt, kp_src[dMatch.trainIdx].angle)
+                                          if dMatch else np.nan for dMatch in match] for match in matches])
         _max_iter_counts = 0
-
+        src_pop_list = []
         while True:
-            if len(good) == 0:
+            # 这里没有用matches判断nan, 是因为类型不对
+            if (np.count_nonzero(~np.isnan(kp_src_matches_point)) == 0) or (len(result) == max_count) or (_max_iter_counts >= max_iter_counts):
                 break
-
-            if len(result) == max_count:
-                break
-
-            if _max_iter_counts >= max_iter_counts:
-                break
-
             _max_iter_counts += 1
-
-            filtered_good_point, angle, first_point = self.filter_good_point(good=good, kp_src=kp_src, kp_sch=kp_sch)
-
+            filtered_good_point, angle, first_point = self.filter_good_point(matches=matches, kp_src=kp_src,
+                                                                             kp_sch=kp_sch,
+                                                                             kp_sch_point=kp_sch_point,
+                                                                             kp_src_matches_point=kp_src_matches_point)
             if first_point.distance > distance_threshold:
                 break
 
@@ -125,21 +108,39 @@ class BaseKeypoint(object):
             try:
                 rect, confidence = self.extract_good_points(im_source=im_source, im_search=im_search, kp_src=kp_src,
                                                             kp_sch=kp_sch, good=filtered_good_point, angle=angle, rgb=rgb)
-                print(f'good:{len(filtered_good_point)}, rect={rect}, confidence={confidence}')
+                # print(f'good:{len(filtered_good_point)}, rect={rect}, confidence={confidence}')
             except PerspectiveTransformError:
                 pass
             finally:
+
                 if rect and confidence >= threshold:
+                    br, tl = rect.br, rect.tl
                     # 移除改范围内的所有特征点 ??有可能因为透视变换的原因，删除了多余的特征点
-                    for reverse_index in range((len(good) - 1), -1, -1):
-                        point = kp_src[good[reverse_index].trainIdx].pt
-                        if rect.contains(Point(point[0], point[1])):
-                            good.pop(reverse_index)
+                    for index, match in enumerate(kp_src_matches_point):
+                        x, y = match[:, 0], match[:, 1]
+                        flag = np.argwhere((x < br.x) & (x > tl.x) & (y < br.y) & (y > tl.y))
+                        for _index in flag:
+                            src_pop_list.append(matches[index, _index][0].trainIdx)
+                            kp_src_matches_point[index, _index, :] = np.nan
+                            matches[index, _index] = np.nan
                     result.append(generate_result(rect, confidence))
                 else:
                     for match in filtered_good_point:
-                        good.pop(good.index(match))
+                        flags = np.argwhere(matches[match.queryIdx, :] == match)
+                        for _index in flags:
+                            src_pop_list.append(match.trainIdx)
+                            kp_src_matches_point[match.queryIdx, _index, :] = np.nan
+                            matches[match.queryIdx, _index] = np.nan
 
+        # 一下代码用于删除目标图片中的特征点,以后会用
+        # src_pop_list = list(set(src_pop_list))
+        # src_pop_list.sort(reverse=True)
+        # mask = np.ones(len(des_src), dtype=bool)
+        # for v in src_pop_list:
+        #     kp_src.pop(v)
+        #     mask[v] = False
+        #
+        # des_src = des_src[mask, ...]
         return result
 
     def get_keypoint_and_descriptor(self, image):
@@ -163,90 +164,59 @@ class BaseKeypoint(object):
         return keypoint, descriptor
 
     @staticmethod
-    def filter_good_point(good, kp_src, kp_sch):
-        """
-        筛选最佳点
-
-        Returns:
-
-        """
-        # 按照queryIdx排升序
-        good = sorted(good, key=lambda x: x.queryIdx)
-        # 筛选重复的queryidx
-        queryidx_list = []
-        # queryidx_list的索引对应的queryidx
-        queryidx_index_list = []
-        queryidx_index = 0
-        queryidx_flag = True
-
-        # first_good_point = good[0]  # 随便填一个用于对比
-        while queryidx_flag:
-            point = good[queryidx_index]
-            _queryIdx = point.queryIdx
-            queryidx_index_list.append(_queryIdx)
-            # first_good_point = first_good_point if point.distance > first_good_point.distance else point
-            point_list = [point]
-            while True:
-                queryidx_index += 1
-                if queryidx_index == len(good):
-                    queryidx_flag = False
-                    break
-                new_point = good[queryidx_index]
-                new_queryidx = new_point.queryIdx
-                if _queryIdx == new_queryidx:
-                    point_list.append(new_point)
-                else:
-                    break
-            queryidx_list.append(point_list)
-
+    def filter_good_point(matches, kp_src, kp_sch, kp_sch_point, kp_src_matches_point):
+        """ 筛选最佳点 """
         # 假设第一个点,及distance最小的点,为基准点
-        distance_good = sorted(good, key=lambda x: x.distance)
-        first_good_point = distance_good[0]
+        sort_list = [sorted(match, key=lambda x: x is np.nan and float('inf') or x.distance)[0]
+                     for match in matches]
+        sort_list = [v for v in sort_list if v is not np.nan]
 
+        first_good_point: cv2.DMatch = sorted(sort_list, key=lambda x: x.distance)[0]
         first_good_point_train: cv2.KeyPoint = kp_src[first_good_point.trainIdx]
         first_good_point_query: cv2.KeyPoint = kp_sch[first_good_point.queryIdx]
-        first_good_point_query_index = queryidx_index_list.index(first_good_point.queryIdx)
         first_good_point_angle = first_good_point_train.angle - first_good_point_query.angle
 
+        def get_points_origin_angle(point_x, point_y, offset):
+            points_origin_angle = np.arctan2(
+                (point_y - offset.pt[1]),
+                (point_x - offset.pt[0])
+            ) * 180 / np.pi
+
+            points_origin_angle = np.where(
+                points_origin_angle == 0,
+                points_origin_angle, points_origin_angle - offset.angle
+            )
+            points_origin_angle = np.where(
+                points_origin_angle >= 0,
+                points_origin_angle, points_origin_angle + 360
+            )
+            return points_origin_angle
+
         # 计算模板图像上,该点与其他特征点的旋转角
-        first_good_point_sch_origin_angle = []
-        for i in kp_sch:
-            _angle = keypoint_origin_angle(kp1=first_good_point_query, kp2=i)
-            if _angle != 0:
-                _angle = _angle - first_good_point_query.angle
-            first_good_point_sch_origin_angle.append(_angle)
+        first_good_point_sch_origin_angle = get_points_origin_angle(kp_sch_point[:, 0], kp_sch_point[:, 1],
+                                                                    first_good_point_query)
 
         # 计算目标图像中,该点与其他特征点的夹角
-        good_point = []
-        for i in queryidx_list:
-            query_point = kp_sch[i[0].queryIdx]
-            # 根据first_good_point的旋转,计算其他特征点旋转后的角度
-            query_rotate_angle = query_point.angle + first_good_point_angle
-            train_points = get_keypoint_from_matches(kp_src, i, 'train')
-            train_points_angle = np.array([i.angle for i in train_points])
-            if query_rotate_angle >= 360:
-                query_rotate_angle -= 360
-            angle_gap = np.abs(train_points_angle - query_rotate_angle)
-            sort_angle_gap = np.argsort(angle_gap)
-            good_point.append(i[sort_angle_gap[0]])
+        kp_sch_rotate_angle = kp_sch_point[:, 2] + first_good_point_angle
+        kp_sch_rotate_angle = np.where(kp_sch_rotate_angle >= 360, kp_sch_rotate_angle - 360, kp_sch_rotate_angle)
+        kp_sch_rotate_angle = kp_sch_rotate_angle.reshape(kp_sch_rotate_angle.shape + (1,))
+
+        kp_src_angle = kp_src_matches_point[:, :, 2]
+        good_point = np.array([matches[index][array[0]] for index, array in
+                               enumerate(np.argsort(np.abs(kp_src_angle - kp_sch_rotate_angle)))])
 
         # 计算各点以first_good_point为原点的旋转角
-        ret, ret_keypoint_pt = [], []
-        # ret_keypoint = []
-        good_point_keypoint = get_keypoint_from_matches(kp_src, good_point, 'train')
-        origin_angle_threshold = round(5 / 360, 2) * 100  # 允许的偏差值,x表示角度 round(x / 360, 2) * 100
-        for i, keypoint in enumerate(good_point_keypoint):
-            _angle = keypoint_origin_angle(kp1=first_good_point_train, kp2=keypoint)
-            if _angle != 0:
-                _angle = _angle - first_good_point_train.angle
-            sch_origin_angle = first_good_point_sch_origin_angle[queryidx_index_list[i]]
-            if round(abs(_angle - sch_origin_angle) / 360, 2) * 100 < origin_angle_threshold:
-                if keypoint.pt not in ret_keypoint_pt:  # 去重
-                    # ret_keypoint.append(keypoint)
-                    ret_keypoint_pt.append(keypoint.pt)
-                    ret.append(good_point[i])
-
-        return ret, int(first_good_point_angle), first_good_point
+        good_point_nan = (np.nan, np.nan)
+        good_point_pt = np.array([good_point_nan if dMatch is np.nan else (*kp_src[dMatch.trainIdx].pt, )
+                                 for dMatch in good_point])
+        good_point_origin_angle = get_points_origin_angle(good_point_pt[:, 0], good_point_pt[:, 1],
+                                                          first_good_point_train)
+        threshold = round(5 / 360, 2) * 100
+        point_bool = (np.abs(good_point_origin_angle - first_good_point_sch_origin_angle) / 360) * 100 < threshold
+        _, index = np.unique(good_point_pt[point_bool], return_index=True, axis=0)
+        good = good_point[point_bool]
+        good = good[index]
+        return good, int(first_good_point_angle), first_good_point
 
     def match_keypoint(self, des_sch, des_src, k=10):
         """

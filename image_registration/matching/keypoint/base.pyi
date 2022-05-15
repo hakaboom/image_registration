@@ -6,11 +6,11 @@ from typing import Union, Optional, Type, Any, Tuple, List
 from baseImage.constant import Place
 from baseImage import Image, Rect
 
-from image_registration.matching import MatchTemplate, CudaMatchTemplae
+from image_registration.matching import MatchTemplate, CudaMatchTemplate
 
 
 image_type = Union[str, bytes, np.ndarray, cv2.cuda.GpuMat, cv2.Mat, cv2.UMat, Image]
-keypoint_type = Tuple[cv2.KeyPoint, ...]
+keypoint_type = List[cv2.KeyPoint, ...]
 matches_type = Tuple[Tuple[cv2.DMatch, ...], ...]
 good_match_type = List[cv2.DMatch]
 
@@ -20,7 +20,7 @@ class BaseKeypoint(object):
     METHOD_NAME: str
     Dtype: Union[Type[np.uint8], Type[np.int8], Type[np.uint16], Type[np.int16], Type[np.int32], Type[np.float32], Type[np.float64]]
     Place: Place
-    template: Union[MatchTemplate, CudaMatchTemplae]
+    template: Union[MatchTemplate, CudaMatchTemplate]
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True, **kwargs):
         self.detector = cv2.DescriptorMatcher
@@ -39,7 +39,8 @@ class BaseKeypoint(object):
 
     def get_keypoint_and_descriptor(self, image: Image) -> Tuple[keypoint_type, np.ndarray]: ...
 
-    def filter_good_point(self, good: good_match_type, kp_src: keypoint_type, kp_sch: keypoint_type) -> Tuple[good_match_type, float, cv2.DMatch]: ...
+    def filter_good_point(self, matches: matches_type, kp_src: keypoint_type, kp_sch: keypoint_type,
+                          kp_sch_point: np.ndarray, kp_src_matches_point: np.ndarray) -> Tuple[good_match_type, float, cv2.DMatch]: ...
 
     def get_rect_from_good_matches(self, im_source: Image, im_search: Image, kp_src: keypoint_type,
                                    des_src: np.ndarray, kp_sch:keypoint_type, des_sch: np.ndarray) -> \
