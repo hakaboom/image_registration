@@ -128,7 +128,6 @@ class BaseKeypoint(object):
                     for match in filtered_good_point:
                         flags = np.argwhere(matches[match.queryIdx, :] == match)
                         for _index in flags:
-                            src_pop_list.append(match.trainIdx)
                             kp_src_matches_point[match.queryIdx, _index, :] = np.nan
                             matches[match.queryIdx, _index] = np.nan
 
