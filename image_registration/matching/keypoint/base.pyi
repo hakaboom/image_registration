@@ -13,6 +13,8 @@ image_type = Union[str, bytes, np.ndarray, cv2.cuda.GpuMat, cv2.Mat, cv2.UMat, I
 keypoint_type = List[cv2.KeyPoint, ...]
 matches_type = Tuple[Tuple[cv2.DMatch, ...], ...]
 good_match_type = List[cv2.DMatch]
+Detector = Union[cv2.Feature2D, cv2.cuda.Feature2DAsync]
+Matcher = Union[cv2.DescriptorMatcher, cv2.cuda.DescriptorMatcher]
 
 
 class BaseKeypoint(object):
@@ -23,15 +25,15 @@ class BaseKeypoint(object):
     template: Union[MatchTemplate, CudaMatchTemplate]
 
     def __init__(self, threshold: Union[int, float] = 0.8, rgb: bool = True, **kwargs):
-        self.detector = cv2.DescriptorMatcher
-        self.matcher = cv2.Feature2D
+        self.detector: Detector = None
+        self.matcher: Matcher = None
         self.threshold: Union[int, float] = 0.8
         self.rgb: bool = True
         ...
 
-    def create_matcher(self, **kwargs) -> cv2.DescriptorMatcher: ...
+    def create_matcher(self, **kwargs) -> Matcher: ...
 
-    def create_detector(self, **kwargs) -> cv2.Feature2D: ...
+    def create_detector(self, **kwargs) -> Detector: ...
 
     def find_best_result(self, im_source: image_type, im_search: image_type, threshold: Union[int, float] = None, rgb: bool = None) -> Optional[Rect]: ...
 
