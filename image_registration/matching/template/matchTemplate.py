@@ -55,6 +55,7 @@ class MatchTemplate(object):
         # 找到最佳匹配项
 
         min_val, max_val, min_loc, max_loc = self.minMaxLoc(result.data)
+
         h, w = im_search.size
         # 求可信度
         crop_rect = Rect(max_loc[0], max_loc[1], w, h)
@@ -116,7 +117,7 @@ class MatchTemplate(object):
             s_gray = im_search.data
 
         result = self.match(i_gray, s_gray)
-        result = Image(data=result, dtype=np.float32, clone=False, place=3)
+        result = Image(data=result, dtype=np.float32, clone=False, place=im_source.place)
         return result
 
     def input_image_check(self, im_source, im_search):
