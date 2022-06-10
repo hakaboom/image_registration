@@ -186,13 +186,13 @@ class MatchTemplate(object):
         Returns:
             float: 最小置信度
         """
-        im_search = im_search.copyMakeBorder(10, 10, 10, 10, cv2.BORDER_REPLICATE)
+        # im_search = im_search.copyMakeBorder(10, 10, 10, 10, cv2.BORDER_REPLICATE)
+        #
+        # img_src_hsv = im_source.cvtColor(cv2.COLOR_BGR2HSV)
+        # img_sch_hsv = im_search.cvtColor(cv2.COLOR_BGR2HSV)
 
-        img_src_hsv = im_source.cvtColor(cv2.COLOR_BGR2HSV)
-        img_sch_hsv = im_search.cvtColor(cv2.COLOR_BGR2HSV)
-
-        src_split = img_src_hsv.split()
-        sch_split = img_sch_hsv.split()
+        src_split = im_source.split()
+        sch_split = im_search.split()
 
         # 计算BGR三通道的confidence，存入bgr_confidence:
         bgr_confidence = [0, 0, 0]
